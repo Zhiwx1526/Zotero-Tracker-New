@@ -1,0 +1,47 @@
+zotero:
+  user_id: ${oc.env:ZOTERO_ID,???}
+  api_key: ${oc.env:ZOTERO_KEY,???}
+  include_path: null
+  ignore_path: null
+source:
+  arxiv:
+    category:
+    - cs.AI
+    - cs.CV
+    - cs.LG
+    - cs.CL
+    include_cross_list: false
+  biorxiv: {}
+  medrxiv: {}
+email:
+  sender: ${oc.env:SENDER,???}
+  receiver: ${oc.env:RECEIVER,???}
+  smtp_server: ${oc.env:SMTP_SERVER,smtp.qq.com}
+  smtp_port: ${oc.env:SMTP_PORT,465}
+  sender_password: ${oc.env:SENDER_PASSWORD,???}
+llm:
+  api:
+    key: ${oc.env:OPENAI_API_KEY,???}
+    base_url: ${oc.env:OPENAI_API_BASE,https://api.openai.com/v1}
+  generation_kwargs:
+    max_tokens: 4096
+    model: ${oc.env:LLM_MODEL,gpt-4o-mini}
+  language: English
+reranker:
+  api:
+    key: ${oc.env:EMBEDDING_API_KEY,${oc.env:OPENAI_API_KEY}}
+    base_url: ${oc.env:EMBEDDING_API_BASE,${oc.env:OPENAI_API_BASE}}
+    model: ${oc.env:EMBEDDING_MODEL,text-embedding-3-small}
+    batch_size: 64
+keywords:
+  top_k: 20
+  max_features: 5000
+  ngram_max: 2
+executor:
+  debug: ${oc.env:DEBUG,false}
+  send_empty: false
+  max_paper_num: 100
+  source:
+  - arxiv
+  reranker: api
+  retriever_sleep_seconds: 1

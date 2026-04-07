@@ -1,0 +1,50 @@
+zotero:
+  user_id: ???
+  api_key: ???
+  include_path: null
+  ignore_path: null
+
+source:
+  arxiv:
+    category: null
+    include_cross_list: false
+  # 预留：后续实现其它预印本来源时再启用。
+  biorxiv: {}
+  medrxiv: {}
+
+email:
+  sender: ???
+  receiver: ???
+  smtp_server: ???
+  smtp_port: ???
+  sender_password: ???
+
+llm:
+  api:
+    key: ???
+    base_url: ???
+  generation_kwargs:
+    max_tokens: 4096
+    model: ???
+  # 与 custom 中 LLM_LANGUAGE 一致；也可写 简体中文（纯 YAML 无插值时中文合法）
+  language: zh
+
+reranker:
+  api:
+    key: null
+    base_url: null
+    model: null
+    batch_size: 64
+
+keywords:
+  top_k: 20
+  max_features: 5000
+  ngram_max: 2
+
+executor:
+  debug: false
+  send_empty: false
+  max_paper_num: 100
+  source: ["arxiv"]
+  reranker: api
+  retriever_sleep_seconds: 1
