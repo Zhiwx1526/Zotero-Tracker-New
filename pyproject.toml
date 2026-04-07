@@ -25,6 +25,7 @@ dependencies = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:hydra"
+pythonpath = ["src"]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

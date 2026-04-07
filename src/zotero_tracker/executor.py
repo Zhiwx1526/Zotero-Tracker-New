@@ -39,9 +39,14 @@ class Executor:
         self.config = config
         self.include_path_patterns = normalize_path_patterns(config.zotero.include_path, "include_path")
         self.ignore_path_patterns = normalize_path_patterns(config.zotero.ignore_path, "ignore_path")
-        self.retrievers = {
-            source: get_retriever_cls(source)(config) for source in config.executor.source
-        }
+        self.retrievers = {}
+        for source in config.executor.source:
+            source_cfg = getattr(config.source, source, None)
+            enabled = bool(source_cfg.get("enabled", True)) if source_cfg is not None else True
+            if not enabled:
+                logger.info(f"来源 {source} 已配置为 disabled，跳过。")
+                continue
+            self.retrievers[source] = get_retriever_cls(source)(config)
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
         self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
 

@@ -32,8 +32,21 @@ reranker:
 
 source:
   arxiv:
+    enabled: true
     category: ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
+  openalex:
+    enabled: true
+    # 为空时自动使用 arxiv.category 作为 OpenAlex 查询词
+    query: null
+    search_title_only: false
+    # 例如：2026-04-01（可选）
+    from_publication_date: null
+    to_publication_date: null
+    per_page: 50
+    max_results: 200
+    # 建议填写以符合 OpenAlex polite pool 规范（可选）
+    mailto: ${oc.env:OPENALEX_MAILTO,null}
 
 executor:
   debug: ${oc.env:DEBUG,false}
-  source: ["arxiv"]
+  source: ["arxiv", "openalex"]

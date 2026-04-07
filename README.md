@@ -1,6 +1,6 @@
 # Zotero-Tracker
 
-根据你的 Zotero 书库，对每日新增 arXiv 论文做兴趣对齐排序（embedding 相似度），并从书库中抽取 TF-IDF 兴趣关键词用于展示；最终以 **Markdown 纯文本** 邮件推送。
+根据你的 Zotero 书库，对新增论文做兴趣对齐排序（embedding 相似度），并从书库中抽取 TF-IDF 兴趣关键词用于展示；最终以 **Markdown 纯文本** 邮件推送。当前支持 `arxiv`，并可扩展 `openalex` 等来源。
 
 ## 环境准备
 
@@ -18,3 +18,35 @@ uv run python -m zotero_tracker.main
 ```
 
 Hydra 覆盖示例：`uv run python -m zotero_tracker.main executor.debug=true`
+
+## 多来源与平台开关
+
+通过两层控制来源是否参与检索：
+
+- `executor.source`：声明要尝试的来源列表。
+- `source.<name>.enabled`：平台级开关（`true/false`）。
+
+示例：
+
+```yaml
+source:
+  arxiv:
+    enabled: true
+    category: ["cs.AI", "cs.LG"]
+  openalex:
+    enabled: true
+    query: null
+    search_title_only: false
+    from_publication_date: null
+    to_publication_date: null
+    per_page: 50
+    max_results: 200
+    mailto: null
+
+executor:
+  source: ["arxiv", "openalex"]
+```
+
+说明：
+- 若 `executor.source` 包含 `openalex`，但 `source.openalex.enabled=false`，则会被跳过。
+- 若 `source.openalex.enabled=true`，但 `executor.source` 不含 `openalex`，同样不会执行（便于按场景组合来源）。

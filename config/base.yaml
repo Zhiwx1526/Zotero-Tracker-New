@@ -6,11 +6,23 @@ zotero:
 
 source:
   arxiv:
+    enabled: true
     category: null
     include_cross_list: false
   # 预留：后续实现其它预印本来源时再启用。
-  biorxiv: {}
-  medrxiv: {}
+  biorxiv:
+    enabled: false
+  medrxiv:
+    enabled: false
+  openalex:
+    enabled: false
+    query: null
+    search_title_only: false
+    from_publication_date: null
+    to_publication_date: null
+    per_page: 50
+    max_results: 200
+    mailto: null
 
 email:
   sender: ???
