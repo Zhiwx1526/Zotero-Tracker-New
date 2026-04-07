@@ -64,6 +64,7 @@ class Executor:
         logger.info(f"共拉取 {len(corpus)} 条带摘要的 Zotero 文献")
         return [
             CorpusPaper(
+                item_key=c["key"],
                 title=c["data"]["title"],
                 abstract=c["data"]["abstractNote"],
                 added_date=datetime.strptime(c["data"]["dateAdded"], "%Y-%m-%dT%H:%M:%SZ"),

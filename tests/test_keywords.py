@@ -9,12 +9,14 @@ from zotero_tracker.protocol import CorpusPaper
 def test_keywords_non_empty():
     corpus = [
         CorpusPaper(
+            item_key="k1",
             title="Deep learning for vision",
             abstract="We propose a neural network architecture for image classification tasks.",
             added_date=datetime(2024, 1, 1),
             paths=["ml"],
         ),
         CorpusPaper(
+            item_key="k2",
             title="Natural language processing survey",
             abstract="Transformers and attention mechanisms for NLP benchmarks.",
             added_date=datetime(2024, 2, 1),

@@ -35,6 +35,10 @@ reranker:
     base_url: null
     model: null
     batch_size: 64
+    cache:
+      enabled: true
+      dir: cache
+      text_format_version: title_abstract_v1
 
 keywords:
   top_k: 20

@@ -92,6 +92,7 @@ class Paper:
 
 @dataclass
 class CorpusPaper:
+    item_key: str
     title: str
     abstract: str
     added_date: datetime
