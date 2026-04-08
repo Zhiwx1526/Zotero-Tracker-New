@@ -120,14 +120,28 @@ class Executor:
         )
 
         all_papers = []
+        failed_sources: list[tuple[str, str]] = []
+        error_policy = str(self.config.executor.get("source_error_policy", "continue")).strip().lower()
         for source, retriever in self.retrievers.items():
             logger.info(f"正在从 {source} 拉取…")
-            papers = retriever.retrieve_papers()
+            try:
+                papers = retriever.retrieve_papers()
+            except Exception as exc:
+                failed_sources.append((source, str(exc)))
+                logger.error(f"{source} 拉取失败：{exc}")
+                if error_policy == "fail_fast":
+                    raise
+                logger.warning(f"按 source_error_policy={error_policy} 继续处理其它来源。")
+                continue
             if not papers:
                 logger.info(f"{source} 无新稿")
                 continue
             logger.info(f"从 {source} 得到 {len(papers)} 篇")
             all_papers.extend(papers)
+
+        if failed_sources:
+            failed_text = "; ".join([f"{s}: {err}" for s, err in failed_sources])
+            logger.warning(f"以下来源失败并已跳过：{failed_text}")
 
         logger.info(f"候选论文总数：{len(all_papers)}")
         reranked: list = []

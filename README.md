@@ -1,6 +1,6 @@
 # Zotero-Tracker
 
-根据你的 Zotero 书库，对新增论文做兴趣对齐排序（embedding 相似度），并从书库中抽取 TF-IDF 兴趣关键词用于展示；最终以 **Markdown 纯文本** 邮件推送。当前支持 `arxiv`，并可扩展 `openalex` 等来源。
+根据你的 Zotero 书库，对新增论文做兴趣对齐排序（embedding 相似度），并从书库中抽取 TF-IDF 兴趣关键词用于展示；最终以 **Markdown 纯文本** 邮件推送。当前支持 `arxiv` / `openalex` / `biorxiv` / `medrxiv` 等来源。
 
 ## 环境准备
 
@@ -33,6 +33,15 @@ source:
   arxiv:
     enabled: true
     category: ["cs.AI", "cs.LG"]
+    max_results: 2000
+  biorxiv:
+    enabled: true
+    days: 2
+    max_results: 200
+  medrxiv:
+    enabled: false
+    days: 2
+    max_results: 200
   openalex:
     enabled: true
     query: null
@@ -45,14 +54,16 @@ source:
     mailto: null
 
 executor:
-  source: ["arxiv", "openalex"]
+  source: ["arxiv", "biorxiv", "medrxiv", "openalex"]
 ```
 
 说明：
 - 若 `executor.source` 包含 `openalex`，但 `source.openalex.enabled=false`，则会被跳过。
 - 若 `source.openalex.enabled=true`，但 `executor.source` 不含 `openalex`，同样不会执行（便于按场景组合来源）。
+- 若某个来源拉取失败，`executor.source_error_policy=continue`（默认）会跳过该来源并继续；改为 `fail_fast` 则立即中断。
 
 ### 日期窗口（OpenAlex 与 arXiv）
 
 - **OpenAlex**：使用 `from_publication_date` + `to_publication_date`（OpenAlex 仅支持按日）。**两项均为 null** 时按 **`lookback_days`（默认 3）** 自动设为 **UTC「当天往前第 N 个自然日」～当天**（比 arXiv 默认窗更宽，缓解索引滞后）。**两项都写明**时则完全按配置日期过滤。
 - **arXiv**：使用官方 API 的 **`submittedDate`**（UTC）：**前一自然日 00:00 起至当天 23:59 止**。查询为 `(cat:… OR …) AND submittedDate:[…]`，条数上限见 `source.arxiv.max_results`（`debug` 时仍会截断为 10）。
+ - **bioRxiv / medRxiv**：使用 `days`（最近 N 天，默认 2），语义与示例 `.../details/biorxiv/7d/0` 一致；条数上限见 `max_results`。

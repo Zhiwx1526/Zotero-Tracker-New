@@ -11,11 +11,21 @@ source:
     include_cross_list: false
     # API 查询最多返回条数（按 submittedDate 排序）；debug 时仍会截断为 10
     max_results: 2000
-  # 预留：后续实现其它预印本来源时再启用。
   biorxiv:
     enabled: false
+    # 最近 N 天的预印本（基于服务器公开的日期语义；默认 2 天）
+    days: 2
+    max_results: 200
+    timeout_seconds: 60
+    num_retries: 3
+    retry_backoff_seconds: 2
   medrxiv:
     enabled: false
+    days: 2
+    max_results: 200
+    timeout_seconds: 60
+    num_retries: 3
+    retry_backoff_seconds: 2
   openalex:
     enabled: false
     query: null
@@ -64,6 +74,8 @@ keywords:
 executor:
   debug: false
   send_empty: false
+  # continue: 单来源失败时跳过并继续；fail_fast: 任一来源失败立即中断
+  source_error_policy: continue
   max_paper_num: 100
   source: ["arxiv"]
   reranker: api

@@ -22,5 +22,3 @@ def _stub(name: str):
     return _StubRetriever
 
 
-_stub("biorxiv")
-_stub("medrxiv")
