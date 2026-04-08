@@ -27,16 +27,20 @@ def send_markdown_email(config: DictConfig, body: str) -> None:
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     msg["Subject"] = Header(f"Zotero 文献追踪 {today}", "utf-8")
 
-    try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-    except Exception as e:
-        logger.debug(f"STARTTLS 失败：{e}，尝试 SSL。")
+    # 465：常见为直接 TLS（如 QQ）；587：明文握手后再 STARTTLS。避免 465 上误用 STARTTLS 的多余失败日志。
+    if smtp_port == 465:
+        server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+    else:
         try:
-            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-        except Exception as e2:
-            logger.debug(f"SSL 失败：{e2}，尝试明文 SMTP。")
             server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+        except Exception as e:
+            logger.debug(f"STARTTLS 失败：{e}，尝试 SSL。")
+            try:
+                server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+            except Exception as e2:
+                logger.debug(f"SSL 失败：{e2}，尝试明文 SMTP。")
+                server = smtplib.SMTP(smtp_server, smtp_port)
 
     server.login(sender, password)
     server.sendmail(sender, [receiver], msg.as_string())

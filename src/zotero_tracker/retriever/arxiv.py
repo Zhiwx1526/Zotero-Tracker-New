@@ -1,12 +1,45 @@
-"""arXiv：RSS 取 ID + arxiv 库拉元数据（仅用摘要，不下载 PDF/HTML）。"""
+"""arXiv：API 查询 + submittedDate 窗口（UTC：前一自然日 00:00 至当天 23:59）。"""
+
+import threading
+from datetime import datetime, timedelta, timezone
 
 import arxiv
-import feedparser
 from arxiv import Result as ArxivResult
+from loguru import logger
 from tqdm import tqdm
 
 from ..protocol import Paper
 from .base import BaseRetriever, register_retriever
+
+# arxiv 库内部 requests 默认无 timeout
+_API_TIMEOUT_S = 120.0
+_STUCK_WARN_AFTER_S = 30.0
+
+
+def _stuck_timer(label: str, seconds: float) -> threading.Timer:
+    def _fire() -> None:
+        logger.warning(f"{label} 已等待超过 {seconds:.0f}s，可能网络较慢或受限")
+
+    timer = threading.Timer(seconds, _fire)
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
+def _submitted_date_range_yesterday_through_today_utc() -> str:
+    """arXiv API：submittedDate:[YYYYMMDDHHMM TO YYYYMMDDHHMM]，见 https://arxiv.org/help/api/user-manual"""
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    yesterday = today - timedelta(days=1)
+    start = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, tzinfo=timezone.utc)
+    end = datetime(today.year, today.month, today.day, 23, 59, tzinfo=timezone.utc)
+    return f"submittedDate:[{start.strftime('%Y%m%d%H%M')} TO {end.strftime('%Y%m%d%H%M')}]"
+
+
+def _build_search_query(categories: list[str]) -> str:
+    cat_parts = [f"cat:{c}" for c in categories]
+    cat_expr = cat_parts[0] if len(cat_parts) == 1 else "(" + " OR ".join(cat_parts) + ")"
+    return f"{cat_expr} AND {_submitted_date_range_yesterday_through_today_utc()}"
 
 
 @register_retriever("arxiv")
@@ -17,29 +50,44 @@ class ArxivRetriever(BaseRetriever):
             raise ValueError("必须在配置中指定 source.arxiv.category。")
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
-        client = arxiv.Client(num_retries=10, delay_seconds=10)
-        query = "+".join(self.config.source.arxiv.category)
-        include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
-        feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
-        if "Feed error for query" in getattr(feed.feed, "title", ""):
-            raise RuntimeError(f"无效的 arXiv 分区查询：{query}")
-        allowed = {"new", "cross"} if include_cross_list else {"new"}
-        all_paper_ids = [
-            i.id.removeprefix("oai:arXiv.org:")
-            for i in feed.entries
-            if i.get("arxiv_announce_type", "new") in allowed
-        ]
-        if self.config.executor.debug:
-            all_paper_ids = all_paper_ids[:10]
+        if self.retriever_config.get("include_cross_list", False):
+            logger.warning(
+                "source.arxiv.include_cross_list=true：当前基于 API 的 cat 查询无法复刻 RSS 的 cross 过滤，"
+                "将仍按分区 cat 检索（含该分区下的交叉列表论文）。"
+            )
 
-        raw_papers: list[ArxivResult] = []
-        bar = tqdm(total=len(all_paper_ids))
-        for i in range(0, len(all_paper_ids), 20):
-            search = arxiv.Search(id_list=all_paper_ids[i : i + 20])
-            batch = list(client.results(search))
-            bar.update(len(batch))
-            raw_papers.extend(batch)
-        bar.close()
+        client = arxiv.Client(num_retries=10, delay_seconds=10)
+        session = client._session
+        orig_get = session.get
+
+        def get_with_timeout(*args, **kwargs):
+            kwargs.setdefault("timeout", _API_TIMEOUT_S)
+            return orig_get(*args, **kwargs)
+
+        session.get = get_with_timeout  # type: ignore[method-assign]
+
+        categories = [str(c) for c in self.config.source.arxiv.category]
+        query = _build_search_query(categories)
+        max_results = int(self.retriever_config.get("max_results", 2000))
+        if self.config.executor.debug:
+            max_results = min(max_results, 10)
+
+        search = arxiv.Search(
+            query=query,
+            max_results=max_results,
+            sort_by=arxiv.SortCriterion.SubmittedDate,
+            sort_order=arxiv.SortOrder.Descending,
+        )
+
+        stuck = _stuck_timer("arXiv API（submittedDate 查询）", _STUCK_WARN_AFTER_S)
+        try:
+            raw_papers = list(tqdm(client.results(search), desc="arxiv"))
+        except Exception as exc:
+            logger.error(f"arXiv API 失败：{exc}")
+            raise
+        finally:
+            stuck.cancel()
+
         return raw_papers
 
     def convert_to_paper(self, raw_paper: ArxivResult) -> Paper:

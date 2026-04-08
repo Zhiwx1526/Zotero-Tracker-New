@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
 from urllib.error import HTTPError
@@ -29,16 +30,25 @@ def _decode_inverted_index(inverted_index: dict[str, list[int]] | None) -> str:
 class OpenAlexRetriever(BaseRetriever):
     API_URL = "https://api.openalex.org/works"
 
-    def _build_filter(self) -> str:
+    def _publication_date_filter(self) -> str:
+        """OpenAlex 按出版日 YYYY-MM-DD 过滤。未写死 from/to 时：UTC 当天往前数 lookback_days 个自然日～当天（日粒度，缓解索引滞后）。"""
         cfg = self.retriever_config
-        filters: list[str] = []
-        from_date = cfg.get("from_publication_date")
-        to_date = cfg.get("to_publication_date")
-        if from_date:
-            filters.append(f"from_publication_date:{from_date}")
-        if to_date:
-            filters.append(f"to_publication_date:{to_date}")
-        return ",".join(filters)
+        from_raw = cfg.get("from_publication_date")
+        to_raw = cfg.get("to_publication_date")
+        from_s = str(from_raw).strip() if from_raw not in (None, "") else ""
+        to_s = str(to_raw).strip() if to_raw not in (None, "") else ""
+
+        if from_s and to_s:
+            return f"from_publication_date:{from_s},to_publication_date:{to_s}"
+
+        now = datetime.now(timezone.utc)
+        today_d = now.date()
+        lookback = max(0, int(cfg.get("lookback_days", 3)))
+        start_d = today_d - timedelta(days=lookback)
+        return (
+            f"from_publication_date:{start_d.isoformat()},"
+            f"to_publication_date:{today_d.isoformat()}"
+        )
 
     def _resolve_query(self) -> str | None:
         cfg = self.retriever_config
@@ -79,9 +89,9 @@ class OpenAlexRetriever(BaseRetriever):
             max_results = min(max_results, 20)
         mailto = cfg.get("mailto")
         filter_parts: list[str] = []
-        base_filter = self._build_filter()
-        if base_filter:
-            filter_parts.append(base_filter)
+        date_filter = self._publication_date_filter()
+        if date_filter:
+            filter_parts.append(date_filter)
         title_only = bool(cfg.get("search_title_only", False))
         if title_only:
             filter_parts.append(f"title.search:{query}")

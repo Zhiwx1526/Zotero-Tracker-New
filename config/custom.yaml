@@ -32,14 +32,16 @@ reranker:
 
 source:
   arxiv:
-    enabled: true
+    enabled: false
     category: ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
+    max_results: 2000
   openalex:
     enabled: true
     # 为空时自动使用 arxiv.category 作为 OpenAlex 查询词
     query: null
     search_title_only: false
-    # 例如：2026-04-01（可选）
+    # 均为 null 时：UTC 从「当天往前 lookback_days 天」～当天（默认 3，比 arXiv 宽以适配索引滞后）
+    lookback_days: 15
     from_publication_date: null
     to_publication_date: null
     per_page: 50

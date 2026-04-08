@@ -9,6 +9,8 @@ source:
     enabled: true
     category: null
     include_cross_list: false
+    # API 查询最多返回条数（按 submittedDate 排序）；debug 时仍会截断为 10
+    max_results: 2000
   # 预留：后续实现其它预印本来源时再启用。
   biorxiv:
     enabled: false
@@ -18,6 +20,8 @@ source:
     enabled: false
     query: null
     search_title_only: false
+    # 均为 null 时按 lookback_days（UTC）自动设 from/to；若两项都写明则改用固定日期
+    lookback_days: 3
     from_publication_date: null
     to_publication_date: null
     per_page: 50
