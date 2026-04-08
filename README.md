@@ -33,6 +33,7 @@ source:
   arxiv:
     enabled: true
     category: ["cs.AI", "cs.LG"]
+    days: 2
     max_results: 2000
   biorxiv:
     enabled: true
@@ -46,7 +47,7 @@ source:
     enabled: true
     query: null
     search_title_only: false
-    lookback_days: 3
+    days: 3
     from_publication_date: null
     to_publication_date: null
     per_page: 50
@@ -62,8 +63,8 @@ executor:
 - 若 `source.openalex.enabled=true`，但 `executor.source` 不含 `openalex`，同样不会执行（便于按场景组合来源）。
 - 若某个来源拉取失败，`executor.source_error_policy=continue`（默认）会跳过该来源并继续；改为 `fail_fast` 则立即中断。
 
-### 日期窗口（OpenAlex 与 arXiv）
+### 日期窗口（OpenAlex、arXiv 与 bioRxiv/medRxiv）
 
-- **OpenAlex**：使用 `from_publication_date` + `to_publication_date`（OpenAlex 仅支持按日）。**两项均为 null** 时按 **`lookback_days`（默认 3）** 自动设为 **UTC「当天往前第 N 个自然日」～当天**（比 arXiv 默认窗更宽，缓解索引滞后）。**两项都写明**时则完全按配置日期过滤。
-- **arXiv**：使用官方 API 的 **`submittedDate`**（UTC）：**前一自然日 00:00 起至当天 23:59 止**。查询为 `(cat:… OR …) AND submittedDate:[…]`，条数上限见 `source.arxiv.max_results`（`debug` 时仍会截断为 10）。
- - **bioRxiv / medRxiv**：使用 `days`（最近 N 天，默认 2），语义与示例 `.../details/biorxiv/7d/0` 一致；条数上限见 `max_results`。
+- **OpenAlex**：使用 `from_publication_date` + `to_publication_date`（OpenAlex 仅支持按日）。**两项均为 null** 时按 **`days`（默认 3）** 自动设为 **UTC「当天往前第 N 个自然日」～当天**。**两项都写明**时则完全按配置日期过滤。
+- **arXiv**：使用 `days`（最近 N 天，默认 2）控制 `submittedDate` 查询窗口（UTC 自然日，含今天）。查询为 `(cat:… OR …) AND submittedDate:[…]`，条数上限见 `source.arxiv.max_results`（`debug` 时仍会截断为 10）。
+- **bioRxiv / medRxiv**：使用 `days`（最近 N 天，默认 2），语义与示例 `.../details/biorxiv/7d/0` 一致；条数上限见 `max_results`。

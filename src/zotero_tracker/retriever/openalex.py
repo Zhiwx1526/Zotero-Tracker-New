@@ -31,7 +31,7 @@ class OpenAlexRetriever(BaseRetriever):
     API_URL = "https://api.openalex.org/works"
 
     def _publication_date_filter(self) -> str:
-        """OpenAlex 按出版日 YYYY-MM-DD 过滤。未写死 from/to 时：UTC 当天往前数 lookback_days 个自然日～当天（日粒度，缓解索引滞后）。"""
+        """OpenAlex 按出版日 YYYY-MM-DD 过滤。未写死 from/to 时：UTC 当天往前数 days 个自然日～当天。"""
         cfg = self.retriever_config
         from_raw = cfg.get("from_publication_date")
         to_raw = cfg.get("to_publication_date")
@@ -43,8 +43,8 @@ class OpenAlexRetriever(BaseRetriever):
 
         now = datetime.now(timezone.utc)
         today_d = now.date()
-        lookback = max(0, int(cfg.get("lookback_days", 3)))
-        start_d = today_d - timedelta(days=lookback)
+        days = max(0, int(cfg.get("days", 3)))
+        start_d = today_d - timedelta(days=days)
         return (
             f"from_publication_date:{start_d.isoformat()},"
             f"to_publication_date:{today_d.isoformat()}"

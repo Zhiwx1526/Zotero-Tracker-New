@@ -1,4 +1,4 @@
-"""arXiv：API 查询 + submittedDate 窗口（UTC：前一自然日 00:00 至当天 23:59）。"""
+"""arXiv：API 查询 + submittedDate 窗口（UTC，最近 N 天，由 source.arxiv.days 控制）。"""
 
 import threading
 from datetime import datetime, timedelta, timezone
@@ -26,20 +26,21 @@ def _stuck_timer(label: str, seconds: float) -> threading.Timer:
     return timer
 
 
-def _submitted_date_range_yesterday_through_today_utc() -> str:
+def _submitted_date_range_recent_days_utc(days: int) -> str:
     """arXiv API：submittedDate:[YYYYMMDDHHMM TO YYYYMMDDHHMM]，见 https://arxiv.org/help/api/user-manual"""
+    days = max(1, int(days))
     now = datetime.now(timezone.utc)
     today = now.date()
-    yesterday = today - timedelta(days=1)
-    start = datetime(yesterday.year, yesterday.month, yesterday.day, 0, 0, tzinfo=timezone.utc)
+    start_day = today - timedelta(days=days - 1)
+    start = datetime(start_day.year, start_day.month, start_day.day, 0, 0, tzinfo=timezone.utc)
     end = datetime(today.year, today.month, today.day, 23, 59, tzinfo=timezone.utc)
     return f"submittedDate:[{start.strftime('%Y%m%d%H%M')} TO {end.strftime('%Y%m%d%H%M')}]"
 
 
-def _build_search_query(categories: list[str]) -> str:
+def _build_search_query(categories: list[str], days: int) -> str:
     cat_parts = [f"cat:{c}" for c in categories]
     cat_expr = cat_parts[0] if len(cat_parts) == 1 else "(" + " OR ".join(cat_parts) + ")"
-    return f"{cat_expr} AND {_submitted_date_range_yesterday_through_today_utc()}"
+    return f"{cat_expr} AND {_submitted_date_range_recent_days_utc(days)}"
 
 
 @register_retriever("arxiv")
@@ -67,7 +68,8 @@ class ArxivRetriever(BaseRetriever):
         session.get = get_with_timeout  # type: ignore[method-assign]
 
         categories = [str(c) for c in self.config.source.arxiv.category]
-        query = _build_search_query(categories)
+        days = int(self.retriever_config.get("days", 2))
+        query = _build_search_query(categories, days)
         max_results = int(self.retriever_config.get("max_results", 2000))
         if self.config.executor.debug:
             max_results = min(max_results, 10)

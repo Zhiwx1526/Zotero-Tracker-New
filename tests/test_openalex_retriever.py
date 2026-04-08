@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from omegaconf import OmegaConf
 
 from zotero_tracker.retriever.openalex import OpenAlexRetriever
@@ -22,6 +24,16 @@ def _build_config(*, query=None, debug=False, search_title_only=False):
             "executor": {"debug": debug},
         }
     )
+
+
+def _extract_date_range(filter_str: str) -> tuple[datetime, datetime]:
+    parts = {}
+    for seg in filter_str.split(","):
+        key, value = seg.split(":", 1)
+        parts[key] = value
+    start = datetime.strptime(parts["from_publication_date"], "%Y-%m-%d")
+    end = datetime.strptime(parts["to_publication_date"], "%Y-%m-%d")
+    return start, end
 
 
 def test_openalex_retrieve_uses_query_filter_and_pagination():
@@ -94,3 +106,29 @@ def test_openalex_convert_to_paper_handles_missing_fields():
 
     assert retriever.convert_to_paper({"title": "", "id": "x"}) is None
     assert retriever.convert_to_paper({"title": "No URL"}) is None
+
+
+def test_openalex_publication_date_filter_uses_days_when_from_to_unset():
+    cfg = OmegaConf.create(
+        {
+            "source": {
+                "arxiv": {"category": ["cs.AI"]},
+                "openalex": {
+                    "enabled": True,
+                    "query": "llm",
+                    "search_title_only": False,
+                    "days": 5,
+                    "from_publication_date": None,
+                    "to_publication_date": None,
+                    "per_page": 5,
+                    "max_results": 5,
+                    "mailto": None,
+                },
+            },
+            "executor": {"debug": False},
+        }
+    )
+    retriever = OpenAlexRetriever(cfg)
+    filt = retriever._publication_date_filter()
+    start, end = _extract_date_range(filt)
+    assert (end.date() - start.date()).days == 5
