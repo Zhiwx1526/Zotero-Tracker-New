@@ -19,6 +19,32 @@ uv run python -m zotero_tracker.main
 
 Hydra 覆盖示例：`uv run python -m zotero_tracker.main executor.debug=true`
 
+## Streamlit 在线入口
+
+安装依赖后可直接启动 Web 界面：
+
+```bash
+uv sync
+uv run streamlit run src/zotero_tracker/web_app.py
+```
+
+或使用脚本入口：
+
+```bash
+uv run zotero-tracker-web
+```
+
+页面支持配置并保存以下参数（写入 `config/custom.yaml`）：
+
+- `zotero.user_id`：Zotero 用户 ID。
+- `zotero.api_key`：Zotero API Key。
+- `email.receiver`：接收日报的邮箱。
+- `llm.api.key` / `llm.api.base_url` / `llm.generation_kwargs.model`：LLM 接口与模型。
+- `source.<platform>.enabled` / `source.<platform>.days`：各来源开关与日期窗口。
+- `executor.min_score`：相似度过滤阈值（留空表示不启用）。
+
+注意：敏感字段（API Key）会写入本地 `config/custom.yaml`，请勿提交到公开仓库。
+
 ## 多来源与平台开关
 
 通过两层控制来源是否参与检索：

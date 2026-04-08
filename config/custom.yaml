@@ -1,44 +1,37 @@
-# 可在此覆盖默认配置，或通过环境变量注入（见 README）。
-
 zotero:
-  user_id: ${oc.env:ZOTERO_ID,???}
-  api_key: ${oc.env:ZOTERO_KEY,???}
-
+  user_id: '20168881'
+  api_key: LNh1frVz1jzWzvuR56fuzPeZ
 email:
   sender: ${oc.env:SENDER,???}
-  receiver: ${oc.env:RECEIVER,???}
+  receiver: 1974464891@qq.com
   smtp_server: ${oc.env:SMTP_SERVER,smtp.qq.com}
   smtp_port: ${oc.env:SMTP_PORT,465}
   sender_password: ${oc.env:SENDER_PASSWORD,???}
-
-# OpenAI 兼容 API：默认 DashScope（千问）。若换其它兼容网关，设 OPENAI_API_BASE / LLM_MODEL 等。
 llm:
   api:
-    key: ${oc.env:OPENAI_API_KEY,???}
-    base_url: ${oc.env:OPENAI_API_BASE,https://dashscope.aliyuncs.com/compatible-mode/v1}
+    key: sk-a963283e8c29434db8e6d3835eedce0b
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
   generation_kwargs:
-    model: ${oc.env:LLM_MODEL,qwen3-max}
-  # 默认用 ASCII「zh」，避免 ${oc.env:...,中文} 触发 OmegaConf 词法错误；环境变量可设为 简体中文 / English 等
+    model: qwen3-max
   language: ${oc.env:LLM_LANGUAGE,zh}
-
 reranker:
   api:
-    # 与 LLM 共用同一套兼容端点；单独设 EMBEDDING_* 可换 embedding 服务。
-    # 内层必须带默认值，否则在 OPENAI_API_* 未设置时 OmegaConf 会报 KeyError。
     batch_size: 10
     key: ${oc.env:EMBEDDING_API_KEY,${oc.env:OPENAI_API_KEY,null}}
     base_url: ${oc.env:EMBEDDING_API_BASE,${oc.env:OPENAI_API_BASE,https://dashscope.aliyuncs.com/compatible-mode/v1}}
     model: ${oc.env:EMBEDDING_MODEL,text-embedding-v3}
-
 source:
   arxiv:
     enabled: true
-    category: ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
+    category:
+    - cs.AI
+    - cs.CV
+    - cs.LG
+    - cs.CL
     days: 2
     max_results: 2000
   biorxiv:
     enabled: false
-    # 示例：最近 2 天 bioRxiv 预印本；改 days 可放宽或收紧窗口
     days: 1
     max_results: 200
     timeout_seconds: 120
@@ -52,21 +45,18 @@ source:
     num_retries: 3
     retry_backoff_seconds: 2
   openalex:
-    enabled: true
-    # 为空时自动使用 arxiv.category 作为 OpenAlex 查询词
+    enabled: false
     query: null
     search_title_only: false
-    # 均为 null 时：UTC 从「当天往前 days 天」～当天（默认 3）
     days: 15
     from_publication_date: null
     to_publication_date: null
     per_page: 50
     max_results: 200
-    # 建议填写以符合 OpenAlex polite pool 规范（可选）
     mailto: ${oc.env:OPENALEX_MAILTO,null}
-
 executor:
   debug: ${oc.env:DEBUG,false}
-  min_score: 3.5    # 最小相似得分，用于过滤结果
+  min_score: 3.5
   source_error_policy: continue
-  source: ["arxiv", "openalex", "biorxiv", "medrxiv"]
+  source:
+  - arxiv
