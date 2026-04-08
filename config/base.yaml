@@ -76,6 +76,8 @@ executor:
   send_empty: false
   # continue: 单来源失败时跳过并继续；fail_fast: 任一来源失败立即中断
   source_error_policy: continue
+  # 相似度相关分数阈值（score）。null 表示不启用阈值过滤
+  min_score: null
   max_paper_num: 100
   source: ["arxiv"]
   reranker: api

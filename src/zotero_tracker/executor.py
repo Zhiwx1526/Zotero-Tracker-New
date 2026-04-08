@@ -148,6 +148,16 @@ class Executor:
         if all_papers:
             logger.info("按与书库的向量相似度重排中…")
             reranked = self.reranker.rerank(all_papers, corpus)
+            min_score_cfg = self.config.executor.get("min_score", None)
+            if min_score_cfg is not None:
+                min_score = float(min_score_cfg)
+                before_filter = len(reranked)
+                reranked = [p for p in reranked if p.score is not None and p.score >= min_score]
+                logger.info(
+                    "已按 min_score={} 过滤：{} -> {} 篇。".format(
+                        min_score, before_filter, len(reranked)
+                    )
+                )
             reranked = reranked[: int(self.config.executor.max_paper_num)]
             logger.info("正在生成一句话摘要…")
             for p in tqdm(reranked):
