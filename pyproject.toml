@@ -42,3 +42,4 @@ package = true
 [project.scripts]
 zotero-tracker = "zotero_tracker.main:main"
 zotero-tracker-web = "zotero_tracker.web_app:run_streamlit"
+zotero-tracker-feedback = "zotero_tracker.feedback_server:run_server"

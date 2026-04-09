@@ -143,6 +143,13 @@ class OpenAlexRetriever(BaseRetriever):
         url = raw_paper.get("id") or primary.get("landing_page_url")
         if not url:
             return None
+        concepts = raw_paper.get("concepts") or []
+        tags = [
+            str(c.get("display_name") or "").strip().lower()
+            for c in concepts[:5]
+            if str(c.get("display_name") or "").strip()
+        ]
+        item_id = str(raw_paper.get("id") or "").rstrip("/").split("/")[-1]
 
         return Paper(
             source=self.name,
@@ -151,4 +158,6 @@ class OpenAlexRetriever(BaseRetriever):
             abstract=abstract,
             url=str(url),
             pdf_url=str(pdf_url) if pdf_url else None,
+            item_id=item_id or None,
+            tags=tags,
         )

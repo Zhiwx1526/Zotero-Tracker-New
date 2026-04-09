@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
@@ -28,6 +28,8 @@ class Paper:
     pdf_url: Optional[str] = None
     tldr: Optional[str] = None
     score: Optional[float] = None
+    item_id: Optional[str] = None
+    tags: list[str] = field(default_factory=list)
 
     def _generate_tldr_with_llm(self, openai_client: OpenAI, llm_params: Any) -> str:
         # 配置里默认用 zh（避免 OmegaConf 在 ${oc.env:...,中文} 里解析失败）；环境变量可写 简体中文

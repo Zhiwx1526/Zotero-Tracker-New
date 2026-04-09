@@ -1,8 +1,9 @@
-"""通过 SMTP 发送纯文本（Markdown）邮件。"""
+"""通过 SMTP 发送邮件（纯文本 + HTML）。"""
 
 import datetime
 import smtplib
 from email.header import Header
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
 
@@ -10,7 +11,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 
-def send_markdown_email(config: DictConfig, body: str) -> None:
+def send_markdown_email(config: DictConfig, body: str, html_body: str | None = None) -> None:
     sender = config.email.sender
     receiver = config.email.receiver
     password = config.email.sender_password
@@ -21,7 +22,10 @@ def send_markdown_email(config: DictConfig, body: str) -> None:
         name, addr = parseaddr(s)
         return formataddr((str(Header(name, "utf-8")), addr))
 
-    msg = MIMEText(body, "plain", "utf-8")
+    msg = MIMEMultipart("alternative")
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    if html_body:
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
     msg["From"] = _format_addr(f"Zotero 文献追踪 <{sender}>")
     msg["To"] = _format_addr(f"收件人 <{receiver}>")
     today = datetime.datetime.now().strftime("%Y-%m-%d")

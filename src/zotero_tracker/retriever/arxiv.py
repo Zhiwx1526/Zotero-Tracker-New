@@ -96,6 +96,13 @@ class ArxivRetriever(BaseRetriever):
         title = raw_paper.title.replace("\n", " ").strip()
         authors = [a.name for a in raw_paper.authors]
         abstract = raw_paper.summary
+        paper_id = ""
+        if getattr(raw_paper, "entry_id", None):
+            paper_id = str(raw_paper.entry_id).rstrip("/").split("/")[-1]
+        tags: list[str] = []
+        primary_cat = getattr(raw_paper, "primary_category", None)
+        if primary_cat:
+            tags.append(str(primary_cat).strip().lower())
         return Paper(
             source=self.name,
             title=title,
@@ -103,4 +110,6 @@ class ArxivRetriever(BaseRetriever):
             abstract=abstract,
             url=raw_paper.entry_id,
             pdf_url=raw_paper.pdf_url,
+            item_id=paper_id or None,
+            tags=tags,
         )

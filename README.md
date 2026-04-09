@@ -45,6 +45,32 @@ uv run zotero-tracker-web
 
 注意：敏感字段（API Key）会写入本地 `config/custom.yaml`，请勿提交到公开仓库。
 
+## 邮件反馈闭环（最小签名）
+
+支持在邮件每条论文后附加 `相关/不相关` 点击反馈，用于下一轮规则重排。
+
+1) 在环境变量中配置反馈服务：
+
+```bash
+set FEEDBACK_BASE_URL=http://127.0.0.1:8787
+set FEEDBACK_SECRET=replace-with-a-random-secret
+```
+
+2) 开启配置（`config/custom.yaml`）：
+
+```yaml
+feedback:
+  enabled: true
+```
+
+3) 启动反馈服务：
+
+```bash
+uv run zotero-tracker-feedback
+```
+
+反馈端点为 `/feedback`，并提供 `/health` 健康检查。服务会做 HMAC 签名校验、过期校验（`ttl_seconds`）和幂等写入（同 `user_id+push_id+item_id` 覆盖）。
+
 ## 多来源与平台开关
 
 通过两层控制来源是否参与检索：

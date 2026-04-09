@@ -2,6 +2,7 @@
 
 import random
 from datetime import datetime
+from uuid import uuid4
 
 from loguru import logger
 from omegaconf import DictConfig, ListConfig
@@ -10,8 +11,14 @@ from pyzotero import zotero
 from tqdm import tqdm
 
 from .email_smtp import send_markdown_email
+from .feedback import (
+    apply_feedback_reweight,
+    build_feedback_links,
+    hash_user_id,
+    paper_item_id,
+)
 from .keywords import extract_keywords_from_corpus
-from .markdown_report import render_markdown
+from .markdown_report import render_html, render_markdown
 from .protocol import CorpusPaper
 from .reranker import get_reranker_cls
 from .retriever import get_retriever_cls
@@ -145,9 +152,17 @@ class Executor:
 
         logger.info(f"候选论文总数：{len(all_papers)}")
         reranked: list = []
+        feedback_links: dict[str, dict[str, str]] = {}
         if all_papers:
             logger.info("按与书库的向量相似度重排中…")
             reranked = self.reranker.rerank(all_papers, corpus)
+            fb_cfg = self.config.get("feedback")
+            if fb_cfg and bool(fb_cfg.get("enabled", False)):
+                user_id = hash_user_id(
+                    str(self.config.email.receiver),
+                    str(fb_cfg.get("user_id_salt", "zotero-tracker")),
+                )
+                apply_feedback_reweight(self.config, reranked, user_id)
             min_score_cfg = self.config.executor.get("min_score", None)
             if min_score_cfg is not None:
                 min_score = float(min_score_cfg)
@@ -162,11 +177,37 @@ class Executor:
             logger.info("正在生成一句话摘要…")
             for p in tqdm(reranked):
                 p.generate_tldr(self.openai_client, self.config.llm)
+            if fb_cfg and bool(fb_cfg.get("enabled", False)):
+                base_url = str(fb_cfg.get("base_url", "")).strip()
+                secret = str(fb_cfg.get("secret", "")).strip()
+                if base_url and secret:
+                    user_id = hash_user_id(
+                        str(self.config.email.receiver),
+                        str(fb_cfg.get("user_id_salt", "zotero-tracker")),
+                    )
+                    push_id = datetime.now().strftime("%Y%m%d") + "-" + uuid4().hex[:10]
+                    ts = int(datetime.now().timestamp())
+                    for p in reranked:
+                        item_id = paper_item_id(p)
+                        links = build_feedback_links(
+                            base_url=base_url,
+                            secret=secret,
+                            user_id=user_id,
+                            push_id=push_id,
+                            item_id=item_id,
+                            ts=ts,
+                            source=p.source,
+                            tags=(p.tags or []),
+                        )
+                        feedback_links[item_id] = {k: v.url for k, v in links.items()}
+                else:
+                    logger.warning("feedback.enabled=true，但 base_url 或 secret 缺失，已跳过反馈链接生成。")
         elif not self.config.executor.send_empty:
             logger.info("无候选论文且 send_empty=false，不发送邮件。")
             return
 
-        md = render_markdown(reranked, kw)
+        md = render_markdown(reranked, kw, feedback_links=feedback_links)
+        html = render_html(reranked, kw, feedback_links=feedback_links)
         logger.info("正在发送邮件…")
-        send_markdown_email(self.config, md)
+        send_markdown_email(self.config, md, html_body=html)
         logger.info("全部完成。")

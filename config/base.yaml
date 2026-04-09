@@ -84,3 +84,19 @@ executor:
   source: ["arxiv"]
   reranker: api
   retriever_sleep_seconds: 1
+
+feedback:
+  enabled: false
+  base_url: ${oc.env:FEEDBACK_BASE_URL,http://127.0.0.1:8787}
+  secret: ${oc.env:FEEDBACK_SECRET,change-me}
+  ttl_seconds: 604800
+  prefetch_guard: basic
+  store_path: data/feedback.sqlite
+  user_id_salt: ${oc.env:FEEDBACK_USER_ID_SALT,zotero-tracker}
+  lookback_days: 90
+  weights:
+    item_pos: 1.2
+    item_neg: 1.6
+    tag_pos: 0.35
+    tag_neg: 0.55
+  decay_tau_days: 30

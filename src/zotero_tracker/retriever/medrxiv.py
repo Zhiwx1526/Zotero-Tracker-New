@@ -57,5 +57,7 @@ class MedrxivRetriever(BaseRetriever):
             abstract=abstract,
             url=url,
             pdf_url=pdf_url,
+            item_id=(doi or rel_doi or None),
+            tags=["medrxiv"],
         )
 
