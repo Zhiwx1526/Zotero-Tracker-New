@@ -22,7 +22,7 @@ jobs:
       TZ: Asia/Shanghai
       ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
       ZOTERO_KEY: ${{ secrets.ZOTERO_KEY }}
-      RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+      RECEIVER: ${{ secrets.RECEIVER }}
       SENDER: ${{ secrets.SENDER }}
       SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
       SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
@@ -62,7 +62,7 @@ jobs:
           uv run python -m zotero_tracker.main \
             zotero.user_id="${ZOTERO_ID}" \
             zotero.api_key="${ZOTERO_KEY}" \
-            email.receiver="${RECEIVER_EMAIL}" \
+            email.receiver="${RECEIVER}" \
             email.sender="${SENDER}" \
             email.sender_password="${SENDER_PASSWORD}" \
             email.smtp_server="${SMTP_SERVER}" \
@@ -70,4 +70,7 @@ jobs:
             llm.api.key="${OPENAI_API_KEY}" \
             llm.api.base_url="${OPENAI_API_BASE}" \
             llm.generation_kwargs.model="${LLM_MODEL}" \
-            llm.language="${LLM_LANGUAGE}"
+            llm.language="${LLM_LANG}" \
+            reranker.api.key="${EMBEDDING_API_KEY}" \
+            reranker.api.base_url="${EMBEDDING_API_BASE}" \
+            reranker.api.model="${EMBEDDING_MODEL}"

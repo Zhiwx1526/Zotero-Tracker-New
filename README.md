@@ -56,21 +56,29 @@ uv run zotero-tracker-web
 - `schedule`：每日定时执行（当前为 `0 1 * * *`，即 UTC 01:00）。
 - `workflow_dispatch`：在 GitHub 页面手动点击执行。
 
-### 1) 配置仓库 Secrets
+### 1) 配置 Secrets（仓库级或 Environment）
 
-在 GitHub 仓库中进入 `Settings -> Secrets and variables -> Actions`，添加以下 `Repository secrets`：
+在 `Settings -> Secrets and variables -> Actions` 配置 **Repository secrets**，或在 `Settings -> Environments` 下为 `env` 等环境配置 **Environment secrets**（与工作流里的 `environment:` 名称一致）。
+
+建议至少配置：
 
 - `ZOTERO_ID`
 - `ZOTERO_KEY`
-- `RECEIVER_EMAIL`
+- `RECEIVER`
 - `SENDER`
 - `SENDER_PASSWORD`
 - `SMTP_SERVER`
 - `SMTP_PORT`
 - `OPENAI_API_KEY`
-- `OPENAI_API_BASE`
+- `OPENAI_API_BASE`（完整 URL，须含 `https://`）
 - `LLM_MODEL`
-- `LLM_LANGUAGE`
+- `LLM_LANGUAGE`（未配置时工作流默认 `zh`）
+
+可选（嵌入重排；未配置时工作流会用 `OPENAI_API_*` 回退，并显式传入 `reranker.api.*`）：
+
+- `EMBEDDING_API_KEY`
+- `EMBEDDING_API_BASE`
+- `EMBEDDING_MODEL`
 
 说明：
 
