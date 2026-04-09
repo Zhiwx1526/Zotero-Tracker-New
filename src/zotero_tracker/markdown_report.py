@@ -8,6 +8,94 @@ from .keywords import KeywordResult
 from .protocol import Paper
 
 
+def _markdown_why_lines(p: Paper) -> list[str]:
+    lines: list[str] = [
+        "#### 为什么推荐给你",
+        "",
+    ]
+    if p.matched_keywords:
+        kw_line = ", ".join(f"`{t}`" for t in p.matched_keywords)
+        lines.append(f"- **命中关键词：** {kw_line}")
+    else:
+        lines.append(
+            "- **命中关键词：** _未命中展示用关键词（可能与书库语言或分词方式有关）。_"
+        )
+    lines.extend(
+        [
+            "- **书库依据：** 以下按对「相关度」总分的**贡献**从高到低排列"
+            "（相关度 = 10 × Σ 余弦相似度 × 时间权重）。",
+            "",
+        ]
+    )
+    if p.corpus_explanations:
+        for k, ex in enumerate(p.corpus_explanations, start=1):
+            path_s = f"；路径：`{ex.collection_path}`" if ex.collection_path else ""
+            lines.append(
+                f"  {k}. {ex.title}{path_s} — 余弦 {ex.cosine_sim:.3f}，"
+                f"时间权重 {ex.time_weight:.4f}，贡献 {ex.contribution:.3f}"
+            )
+    else:
+        lines.append("  _（未启用分解或暂无书库条目。）_")
+    lines.extend(
+        [
+            "",
+            "_说明：分解基于向量相似度与时间衰减。若启用邮件反馈加权，最终相关度可能已单独调整。_",
+            "",
+        ]
+    )
+    return lines
+
+
+def _html_why_block(p: Paper) -> str:
+    if p.matched_keywords:
+        kw_html = ", ".join(escape(t) for t in p.matched_keywords)
+    else:
+        kw_html = (
+            "<span style='color:#6b7280;'>未命中展示用关键词"
+            "（可能与书库语言或分词方式有关）。</span>"
+        )
+    rows: list[str] = []
+    for ex in p.corpus_explanations:
+        path_cell = escape(ex.collection_path or "—")
+        rows.append(
+            "<tr>"
+            f"<td style='padding:6px 8px;border:1px solid #e5e7eb;'>{escape(ex.title)}</td>"
+            f"<td style='padding:6px 8px;border:1px solid #e5e7eb;font-size:12px;'>{path_cell}</td>"
+            f"<td style='padding:6px 8px;border:1px solid #e5e7eb;'>{ex.cosine_sim:.3f}</td>"
+            f"<td style='padding:6px 8px;border:1px solid #e5e7eb;'>{ex.time_weight:.4f}</td>"
+            f"<td style='padding:6px 8px;border:1px solid #e5e7eb;'>{ex.contribution:.3f}</td>"
+            "</tr>"
+        )
+    if rows:
+        table = (
+            "<table style='border-collapse:collapse;width:100%;font-size:13px;margin:8px 0;'>"
+            "<thead><tr>"
+            "<th style='text-align:left;padding:6px 8px;border:1px solid #e5e7eb;'>书库标题</th>"
+            "<th style='text-align:left;padding:6px 8px;border:1px solid #e5e7eb;'>集合路径</th>"
+            "<th style='padding:6px 8px;border:1px solid #e5e7eb;'>余弦相似度</th>"
+            "<th style='padding:6px 8px;border:1px solid #e5e7eb;'>时间权重</th>"
+            "<th style='padding:6px 8px;border:1px solid #e5e7eb;'>贡献</th>"
+            "</tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
+        )
+    else:
+        table = "<p style='color:#6b7280;font-size:13px;'>未启用分解或暂无书库条目。</p>"
+    note = (
+        "<p style='font-size:12px;color:#6b7280;margin:8px 0 0 0;'>"
+        "分解基于向量相似度与时间衰减；若启用邮件反馈加权，最终相关度可能已单独调整。"
+        "</p>"
+    )
+    return (
+        "<h5 style='margin:12px 0 6px 0;'>为什么推荐给你</h5>"
+        f"<p style='margin:4px 0;'><b>命中关键词：</b> {kw_html}</p>"
+        "<p style='margin:4px 0;font-size:13px;'>"
+        "书库依据（按对「相关度」总分的贡献从高到低；相关度 = 10 × Σ 余弦相似度 × 时间权重）："
+        "</p>"
+        f"{table}{note}"
+    )
+
+
 def render_markdown(
     papers: list[Paper],
     keywords: KeywordResult,
@@ -47,6 +135,7 @@ def render_markdown(
         if p.pdf_url:
             lines.append(f"- **PDF：** {p.pdf_url}")
         lines.append(f"- **一句话摘要：** {tldr}")
+        lines.extend(_markdown_why_lines(p))
         pid = paper_item_id(p)
         item_feedback = (feedback_links or {}).get(pid, {})
         rel_link = item_feedback.get(LABEL_RELEVANT)
@@ -107,6 +196,7 @@ def render_html(
                 f"<a href='{escape(p.pdf_url)}' target='_blank'>下载 PDF</a></p>"
             )
         parts.append(f"<p style='margin:6px 0 10px 0;'><b>一句话摘要：</b> {tldr}</p>")
+        parts.append(_html_why_block(p))
         if rel_link or irrel_link:
             parts.append("<div>")
             if rel_link:

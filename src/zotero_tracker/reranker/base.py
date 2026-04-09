@@ -5,6 +5,7 @@ import numpy as np
 from omegaconf import DictConfig
 
 from ..protocol import CorpusPaper, Paper
+from .explain import attach_corpus_explanations
 
 registered_rerankers: dict[str, type["BaseReranker"]] = {}
 
@@ -36,6 +37,13 @@ class BaseReranker(ABC):
     def __init__(self, config: DictConfig):
         self.config = config
 
+    def _explain_settings(self) -> tuple[bool, int, int]:
+        ex = self.config.executor
+        enabled = bool(ex.get("explain_enabled", True))
+        top_k = int(ex.get("explain_top_k", 5))
+        title_max_len = int(ex.get("explain_title_max_len", 80))
+        return enabled, top_k, title_max_len
+
     def rerank(self, candidates: list[Paper], corpus: list[CorpusPaper]) -> list[Paper]:
         # 书库中越新的条目权重越高（与 zotero-arxiv-daily 一致）
         corpus = sorted(corpus, key=lambda x: x.added_date, reverse=True)
@@ -46,6 +54,16 @@ class BaseReranker(ABC):
             [_text_for_embedding(c.title, c.abstract) for c in corpus],
         )
         assert sim.shape == (len(candidates), len(corpus))
+        en, tk, tmax = self._explain_settings()
+        attach_corpus_explanations(
+            candidates,
+            corpus,
+            time_decay_weight,
+            sim,
+            top_k=tk,
+            enabled=en,
+            title_max_len=tmax,
+        )
         scores = (sim * time_decay_weight).sum(axis=1) * 10
         for s, c in zip(scores, candidates, strict=True):
             c.score = float(s)

@@ -55,6 +55,7 @@ source:
     max_results: 200
     mailto: ${oc.env:OPENALEX_MAILTO,null}
 executor:
+  explain_enabled: true
   debug: ${oc.env:DEBUG,false}
   min_score: 3.6
   source_error_policy: continue

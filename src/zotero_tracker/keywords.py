@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import numpy as np
@@ -51,3 +52,21 @@ def extract_keywords_from_corpus(
     picked_terms = terms[order].tolist()
     picked_scores = mean_scores[order].tolist()
     return KeywordResult(terms=picked_terms, scores=picked_scores)
+
+
+def match_keywords_in_paper(terms: list[str], title: str, abstract: str) -> list[str]:
+    """在标题+摘要中匹配兴趣关键词；保留 terms 中的原始写法与顺序。"""
+    blob = f"{title or ''}\n{abstract or ''}".lower()
+    matched: list[str] = []
+    for term in terms:
+        t = str(term).strip()
+        if not t:
+            continue
+        tl = t.lower()
+        if " " in tl:
+            if tl in blob:
+                matched.append(t)
+        else:
+            if re.search(r"\b" + re.escape(tl) + r"\b", blob):
+                matched.append(t)
+    return matched

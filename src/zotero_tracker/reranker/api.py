@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 
 from ..protocol import CorpusPaper, Paper
 from .base import BaseReranker, _text_for_embedding, register_reranker
+from .explain import attach_corpus_explanations
 from .cache_store import build_fingerprint, load_cache, save_cache
 
 
@@ -43,6 +44,16 @@ class ApiReranker(BaseReranker):
         corpus_n = corpus_embeddings / np.linalg.norm(corpus_embeddings, axis=1, keepdims=True)
         sim = np.dot(candidate_n, corpus_n.T)
         assert sim.shape == (len(candidates), len(corpus))
+        en, tk, tmax = self._explain_settings()
+        attach_corpus_explanations(
+            candidates,
+            corpus,
+            time_decay_weight,
+            sim,
+            top_k=tk,
+            enabled=en,
+            title_max_len=tmax,
+        )
         scores = (sim * time_decay_weight).sum(axis=1) * 10
         for s, c in zip(scores, candidates, strict=True):
             c.score = float(s)

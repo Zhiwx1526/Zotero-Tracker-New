@@ -2,7 +2,7 @@ from datetime import datetime
 
 from omegaconf import OmegaConf
 
-from zotero_tracker.keywords import extract_keywords_from_corpus
+from zotero_tracker.keywords import extract_keywords_from_corpus, match_keywords_in_paper
 from zotero_tracker.protocol import CorpusPaper
 
 
@@ -28,3 +28,28 @@ def test_keywords_non_empty():
     assert result.terms
     assert len(result.terms) <= 10
     assert len(result.scores) == len(result.terms)
+
+
+def test_match_keywords_single_token():
+    terms = ["learning", "transformer"]
+    title = "Deep Learning Survey"
+    abstract = "No match here."
+    assert match_keywords_in_paper(terms, title, abstract) == ["learning"]
+
+
+def test_match_keywords_phrase_ngram():
+    terms = ["machine learning", "foo"]
+    title = "Intro"
+    abstract = "We study machine learning methods."
+    assert match_keywords_in_paper(terms, title, abstract) == ["machine learning"]
+
+
+def test_match_keywords_no_substring_for_single_token():
+    terms = ["net"]
+    title = "Neural networks"
+    abstract = ""
+    assert match_keywords_in_paper(terms, title, abstract) == []
+
+
+def test_match_keywords_empty_terms():
+    assert match_keywords_in_paper([], "a", "b") == []

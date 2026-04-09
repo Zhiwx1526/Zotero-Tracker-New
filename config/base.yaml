@@ -84,6 +84,10 @@ executor:
   source: ["arxiv"]
   reranker: api
   retriever_sleep_seconds: 1
+  # 每篇论文邮件中的「为什么推荐」：书库分解条数与标题展示长度
+  explain_enabled: true     
+  explain_top_k: 2     # 为什么推荐 条数
+  explain_title_max_len: 80
 
 feedback:
   enabled: false

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
@@ -19,6 +21,18 @@ def _llm_get(llm_params: Any, key: str, default: Any = None) -> Any:
 
 
 @dataclass
+class CorpusMatchExplain:
+    """单条书库文献对候选论文得分的解释项（按对总分的贡献排序）。"""
+
+    item_key: str
+    title: str
+    cosine_sim: float
+    time_weight: float
+    contribution: float
+    collection_path: Optional[str] = None
+
+
+@dataclass
 class Paper:
     source: str
     title: str
@@ -30,6 +44,8 @@ class Paper:
     score: Optional[float] = None
     item_id: Optional[str] = None
     tags: list[str] = field(default_factory=list)
+    matched_keywords: list[str] = field(default_factory=list)
+    corpus_explanations: list[CorpusMatchExplain] = field(default_factory=list)
 
     def _generate_tldr_with_llm(self, openai_client: OpenAI, llm_params: Any) -> str:
         # 配置里默认用 zh（避免 OmegaConf 在 ${oc.env:...,中文} 里解析失败）；环境变量可写 简体中文

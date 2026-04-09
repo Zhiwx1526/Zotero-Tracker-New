@@ -1,6 +1,7 @@
 """串联：Zotero 语料 → 关键词 → 各来源检索 → 重排 → TLDR → Markdown 邮件。"""
 
 import random
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
 
@@ -17,9 +18,9 @@ from .feedback import (
     hash_user_id,
     paper_item_id,
 )
-from .keywords import extract_keywords_from_corpus
+from .keywords import KeywordResult, extract_keywords_from_corpus, match_keywords_in_paper
 from .markdown_report import render_html, render_markdown
-from .protocol import CorpusPaper
+from .protocol import CorpusPaper, Paper
 from .reranker import get_reranker_cls
 from .retriever import get_retriever_cls
 from .utils_glob import glob_match
@@ -39,6 +40,12 @@ def normalize_path_patterns(
     if any(not isinstance(pattern, str) for pattern in patterns):
         raise TypeError(f"config.zotero.{config_key} 中的元素必须均为字符串。")
     return list(patterns)
+
+
+@dataclass
+class RunResult:
+    papers: list[Paper]
+    keywords: KeywordResult
 
 
 class Executor:
@@ -114,12 +121,12 @@ class Executor:
             logger.info(f"筛选后共 {len(corpus)} 条。示例如下：\n{sample_text}\n...")
         return corpus
 
-    def run(self) -> None:
+    def run(self) -> RunResult | None:
         corpus = self.fetch_zotero_corpus()
         corpus = self.filter_corpus(corpus)
         if len(corpus) == 0:
             logger.error(f"未找到可用 Zotero 文献，请检查配置：\n{self.config.zotero}")
-            return
+            return None
 
         kw = extract_keywords_from_corpus(corpus, self.config.keywords)
         logger.info(
@@ -174,6 +181,8 @@ class Executor:
                     )
                 )
             reranked = reranked[: int(self.config.executor.max_paper_num)]
+            for p in reranked:
+                p.matched_keywords = match_keywords_in_paper(kw.terms, p.title, p.abstract)
             logger.info("正在生成一句话摘要…")
             for p in tqdm(reranked):
                 p.generate_tldr(self.openai_client, self.config.llm)
@@ -204,10 +213,11 @@ class Executor:
                     logger.warning("feedback.enabled=true，但 base_url 或 secret 缺失，已跳过反馈链接生成。")
         elif not self.config.executor.send_empty:
             logger.info("无候选论文且 send_empty=false，不发送邮件。")
-            return
+            return None
 
         md = render_markdown(reranked, kw, feedback_links=feedback_links)
         html = render_html(reranked, kw, feedback_links=feedback_links)
         logger.info("正在发送邮件…")
         send_markdown_email(self.config, md, html_body=html)
         logger.info("全部完成。")
+        return RunResult(papers=reranked, keywords=kw)

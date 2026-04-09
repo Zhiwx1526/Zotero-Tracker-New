@@ -13,10 +13,10 @@ from omegaconf import DictConfig, OmegaConf
 
 try:
     # 包内导入：适用于 `uv run zotero-tracker-web`
-    from .executor import Executor
+    from .executor import Executor, RunResult
 except ImportError:
     # 脚本导入：适用于 `uv run streamlit run src/zotero_tracker/web_app.py`
-    from zotero_tracker.executor import Executor
+    from zotero_tracker.executor import Executor, RunResult
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 dotenv.load_dotenv()
@@ -127,12 +127,29 @@ def _render_form(cfg: DictConfig) -> dict[str, Any]:
 
     with st.container(border=True):
         st.markdown("### Executor")
+        explain_enabled = st.toggle(
+            "executor.explain_enabled（推荐原因）",
+            value=bool(cfg.executor.get("explain_enabled", True)),
+            help="开启后邮件与网页会展示「为什么推荐」：命中关键词与书库相似度分解。",
+            key="executor_explain_enabled",
+        )
         min_score_raw = cfg.executor.get("min_score")
         min_score_text = "" if min_score_raw is None else str(min_score_raw)
         min_score_input = st.text_input(
             "executor.min_score",
             value=min_score_text,
             help="相似度过滤阈值；留空表示不启用阈值过滤。",
+        )
+
+    with st.container(border=True):
+        st.markdown("### Feedback")
+        fb_cfg = cfg.get("feedback")
+        fb_enabled_default = bool(fb_cfg.get("enabled", False)) if fb_cfg is not None else False
+        feedback_enabled = st.toggle(
+            "feedback.enabled（是否开启推送反馈）",
+            value=fb_enabled_default,
+            help="开启后邮件中可带「相关 / 不相关」链接，并参与后续重排加权（需配置反馈服务 base_url 与 secret）。",
+            key="feedback_enabled",
         )
 
     return {
@@ -143,6 +160,8 @@ def _render_form(cfg: DictConfig) -> dict[str, Any]:
         "llm_base_url": llm_base_url,
         "llm_model": llm_model,
         "min_score_input": min_score_input,
+        "explain_enabled": explain_enabled,
+        "feedback_enabled": feedback_enabled,
         "source_values": {source: _get_source(cfg, source) for source in SUPPORTED_SOURCES},
     }
 
@@ -169,6 +188,11 @@ def _apply_form_to_custom(custom_cfg: DictConfig, form_data: dict[str, Any]) -> 
     custom_cfg.llm.api.base_url = form_data["llm_base_url"].strip() or "???"
     custom_cfg.llm.generation_kwargs.model = form_data["llm_model"].strip() or "???"
     custom_cfg.executor.min_score = min_score
+    custom_cfg.executor.explain_enabled = bool(form_data["explain_enabled"])
+
+    if custom_cfg.get("feedback") is None:
+        custom_cfg.feedback = OmegaConf.create({})
+    custom_cfg.feedback.enabled = bool(form_data["feedback_enabled"])
 
     enabled_sources: list[str] = []
     for source, source_cfg in form_data["source_values"].items():
@@ -207,13 +231,15 @@ def _configure_runtime_logging(log_box: Any) -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
-def _run_tracker() -> tuple[bool, str]:
+def _run_tracker() -> tuple[bool, str, RunResult | None]:
     try:
         runtime_cfg = _load_merged_config()
-        Executor(runtime_cfg).run()
+        result = Executor(runtime_cfg).run()
     except Exception as exc:
-        return False, f"运行失败：{exc}"
-    return True, "运行完成。"
+        return False, f"运行失败：{exc}", None
+    if result is None:
+        return True, "运行结束（未发送邮件或未产出结果）。", None
+    return True, "运行完成。", result
 
 
 def main() -> None:
@@ -223,6 +249,8 @@ def main() -> None:
 
     if "run_logs" not in st.session_state:
         st.session_state["run_logs"] = []
+    if "last_run_result" not in st.session_state:
+        st.session_state["last_run_result"] = None
 
     merged_cfg = _load_merged_config()
     form_data = _render_form(merged_cfg)
@@ -247,15 +275,51 @@ def main() -> None:
         log_box = st.empty()
         _configure_runtime_logging(log_box)
         with st.spinner("任务运行中，请稍候..."):
-            ok, msg = _run_tracker()
+            ok, msg, run_result = _run_tracker()
         if ok:
             st.success(msg)
+            st.session_state["last_run_result"] = run_result
         else:
             st.error(msg)
 
     with st.expander("运行日志", expanded=False):
         log_text = "\n".join(st.session_state["run_logs"][-500:])
         st.code(log_text if log_text else "暂无日志")
+
+    last = st.session_state.get("last_run_result")
+    if last is not None:
+        with st.expander("最近一次推送的论文与「为什么推荐」", expanded=False):
+            if last.keywords.terms:
+                st.caption("书库兴趣关键词（展示用）")
+                st.write(", ".join(last.keywords.terms))
+            if not last.papers:
+                st.info("本次列表为空（可能当日无候选或已被阈值过滤）。")
+            for idx, paper in enumerate(last.papers, start=1):
+                with st.container(border=True):
+                    st.markdown(f"**{idx}.** [{paper.title}]({paper.url})")
+                    sc = f"{paper.score:.3f}" if paper.score is not None else "—"
+                    st.caption(f"来源 {paper.source} · 相关度 {sc}")
+                    if paper.tldr:
+                        st.write(paper.tldr)
+                    st.markdown("**为什么推荐给你**")
+                    if paper.matched_keywords:
+                        st.write("命中关键词：" + ", ".join(paper.matched_keywords))
+                    else:
+                        st.caption("未命中展示用关键词（可能与书库语言或分词方式有关）。")
+                    if paper.corpus_explanations:
+                        rows = [
+                            {
+                                "书库标题": e.title,
+                                "集合路径": e.collection_path or "—",
+                                "余弦相似度": round(e.cosine_sim, 3),
+                                "时间权重": round(e.time_weight, 4),
+                                "贡献": round(e.contribution, 3),
+                            }
+                            for e in paper.corpus_explanations
+                        ]
+                        st.dataframe(rows, use_container_width=True, hide_index=True)
+                    else:
+                        st.caption("无书库分解（未启用或暂无条目）。")
 
 
 def run_streamlit() -> None:
