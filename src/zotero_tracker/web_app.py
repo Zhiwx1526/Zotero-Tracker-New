@@ -18,6 +18,8 @@ except ImportError:
     # 脚本导入：适用于 `uv run streamlit run src/zotero_tracker/web_app.py`
     from zotero_tracker.executor import Executor, RunResult
 
+import hydra  # noqa: F401 — 注册 OmegaConf 的 oc.* 解析器，供 ${oc.env:...} 使用
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 dotenv.load_dotenv()
 
@@ -25,6 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = PROJECT_ROOT / "config"
 BASE_CONFIG_PATH = CONFIG_DIR / "base.yaml"
 CUSTOM_CONFIG_PATH = CONFIG_DIR / "custom.yaml"
+ENV_PATH = PROJECT_ROOT / ".env"
 SUPPORTED_SOURCES = ("arxiv", "openalex", "biorxiv", "medrxiv")
 SOURCE_LABELS = {
     "arxiv": "arXiv 预印本平台",
@@ -37,7 +40,71 @@ SOURCE_LABELS = {
 def _load_merged_config() -> DictConfig:
     base_cfg = OmegaConf.load(BASE_CONFIG_PATH)
     custom_cfg = OmegaConf.load(CUSTOM_CONFIG_PATH)
-    return OmegaConf.merge(base_cfg, custom_cfg)
+    merged = OmegaConf.merge(base_cfg, custom_cfg)
+    OmegaConf.resolve(merged)
+    return merged
+
+
+def _format_env_value(val: str) -> str:
+    if any(c in val for c in " \t\n\r#\"'\\"):
+        escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return val
+
+
+def _upsert_dotenv(path: Path, updates: dict[str, str]) -> None:
+    """写入或更新 .env 中的键，保留原有行顺序与其它键。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    seen: set[str] = set()
+    out_lines: list[str] = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=", 1)[0].strip()
+                if key in updates:
+                    out_lines.append(f"{key}={_format_env_value(updates[key])}")
+                    seen.add(key)
+                    continue
+            out_lines.append(line)
+    for key, value in updates.items():
+        if key not in seen:
+            out_lines.append(f"{key}={_format_env_value(value)}")
+    path.write_text("\n".join(out_lines) + ("\n" if out_lines else ""), encoding="utf-8")
+
+
+def _build_env_updates_from_form(form_data: dict[str, Any]) -> dict[str, str]:
+    """从表单生成待写入 .env 的键值。密码类字段若留空则不改写已有环境变量。"""
+    updates: dict[str, str] = {}
+
+    zid = form_data["zotero_user_id"].strip()
+    if zid:
+        updates["ZOTERO_ID"] = zid
+
+    zk = form_data["zotero_api_key"].strip()
+    if zk:
+        updates["ZOTERO_KEY"] = zk
+
+    recv = form_data["email_receiver"].strip()
+    if recv:
+        updates["RECEIVER_EMAIL"] = recv
+    # 兼容旧 .env 中的 RECEIVER
+    if recv:
+        updates["RECEIVER"] = recv
+
+    lk = form_data["llm_key"].strip()
+    if lk:
+        updates["OPENAI_API_KEY"] = lk
+
+    lb = form_data["llm_base_url"].strip()
+    if lb:
+        updates["OPENAI_API_BASE"] = lb
+
+    lm = form_data["llm_model"].strip()
+    if lm:
+        updates["LLM_MODEL"] = lm
+
+    return updates
 
 
 def _clean_text(value: Any) -> str:
@@ -55,7 +122,10 @@ def _get_source(cfg: DictConfig, source: str) -> DictConfig:
 
 def _render_form(cfg: DictConfig) -> dict[str, Any]:
     st.subheader("参数配置")
-    st.caption("所有参数会写入 `config/custom.yaml`，用于后续默认运行。")
+    st.caption(
+        "敏感项（Zotero / 邮箱 / LLM）保存到项目根目录 `.env`；"
+        "`config/custom.yaml` 仅写入非敏感结构与 `${oc.env:...}` 占位，请勿将 `.env` 提交到仓库。"
+    )
 
     with st.container(border=True):
         st.markdown("### Zotero")
@@ -181,12 +251,13 @@ def _apply_form_to_custom(custom_cfg: DictConfig, form_data: dict[str, Any]) -> 
     if min_score_err:
         return min_score_err
 
-    custom_cfg.zotero.user_id = form_data["zotero_user_id"].strip() or "???"
-    custom_cfg.zotero.api_key = form_data["zotero_api_key"].strip() or "???"
-    custom_cfg.email.receiver = form_data["email_receiver"].strip() or "???"
-    custom_cfg.llm.api.key = form_data["llm_key"].strip() or "???"
-    custom_cfg.llm.api.base_url = form_data["llm_base_url"].strip() or "???"
-    custom_cfg.llm.generation_kwargs.model = form_data["llm_model"].strip() or "???"
+    # 敏感字段通过环境变量注入；YAML 中只保留 oc.env 引用，避免密钥落盘到 custom.yaml
+    custom_cfg.zotero.user_id = "${oc.env:ZOTERO_ID,???}"
+    custom_cfg.zotero.api_key = "${oc.env:ZOTERO_KEY,???}"
+    custom_cfg.email.receiver = "${oc.env:RECEIVER_EMAIL,???}"
+    custom_cfg.llm.api.key = "${oc.env:OPENAI_API_KEY,???}"
+    custom_cfg.llm.api.base_url = "${oc.env:OPENAI_API_BASE,???}"
+    custom_cfg.llm.generation_kwargs.model = "${oc.env:LLM_MODEL,???}"
     custom_cfg.executor.min_score = min_score
     custom_cfg.executor.explain_enabled = bool(form_data["explain_enabled"])
 
@@ -267,8 +338,12 @@ def main() -> None:
         if err:
             st.error(err)
             return
+        env_updates = _build_env_updates_from_form(form_data)
+        if env_updates:
+            _upsert_dotenv(ENV_PATH, env_updates)
+            dotenv.load_dotenv(ENV_PATH, override=True)
         _save_custom_config(custom_cfg)
-        st.success("配置已保存到 config/custom.yaml")
+        st.success("配置已保存：敏感项写入 `.env`，结构与占位写入 `config/custom.yaml`。")
 
     if run_clicked:
         st.session_state["run_logs"] = []

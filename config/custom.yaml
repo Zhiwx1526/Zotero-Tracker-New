@@ -1,18 +1,18 @@
 zotero:
-  user_id: '20168881'
-  api_key: LNh1frVz1jzWzvuR56fuzPeZ
+  user_id: ${oc.env:ZOTERO_ID,???}
+  api_key: ${oc.env:ZOTERO_KEY,???}
 email:
   sender: ${oc.env:SENDER,???}
-  receiver: 1974464891@qq.com
+  receiver: ${oc.env:RECEIVER,???}
   smtp_server: ${oc.env:SMTP_SERVER,smtp.qq.com}
   smtp_port: ${oc.env:SMTP_PORT,465}
   sender_password: ${oc.env:SENDER_PASSWORD,???}
 llm:
   api:
-    key: sk-a963283e8c29434db8e6d3835eedce0b
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    key: ${oc.env:OPENAI_API_KEY,???}
+    base_url: ${oc.env:OPENAI_API_BASE,???}
   generation_kwargs:
-    model: qwen3-max
+    model: ${oc.env:LLM_MODEL,???}
   language: ${oc.env:LLM_LANGUAGE,zh}
 reranker:
   api:

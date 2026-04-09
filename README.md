@@ -34,16 +34,20 @@ uv run streamlit run src/zotero_tracker/web_app.py
 uv run zotero-tracker-web
 ```
 
-页面支持配置并保存以下参数（写入 `config/custom.yaml`）：
+页面支持配置并保存以下参数：
 
-- `zotero.user_id`：Zotero 用户 ID。
-- `zotero.api_key`：Zotero API Key。
-- `email.receiver`：接收日报的邮箱。
-- `llm.api.key` / `llm.api.base_url` / `llm.generation_kwargs.model`：LLM 接口与模型。
+- **敏感项**（Zotero、收件邮箱、LLM Key / Base URL / 模型名等）写入项目根目录 **`.env`**。
+- **非敏感结构**（来源开关、天数、`executor` 等）写入 **`config/custom.yaml`**，其中敏感占位使用 `${oc.env:...}`，由 `.env` 提供实际值。
+
+具体包括：
+
+- `zotero.user_id` / `zotero.api_key`：对应环境变量 `ZOTERO_ID`、`ZOTERO_KEY`。
+- `email.receiver`：对应 `RECEIVER_EMAIL`（同时写入 `RECEIVER` 以兼容旧习惯）。
+- `llm.api.key` / `llm.api.base_url` / `llm.generation_kwargs.model`：对应 `OPENAI_API_KEY`、`OPENAI_API_BASE`、`LLM_MODEL`。
 - `source.<platform>.enabled` / `source.<platform>.days`：各来源开关与日期窗口。
 - `executor.min_score`：相似度过滤阈值（留空表示不启用）。
 
-注意：敏感字段（API Key）会写入本地 `config/custom.yaml`，请勿提交到公开仓库。
+注意：`.env` 已在 `.gitignore` 中忽略；请勿将 `.env` 或含明文密钥的 `custom.yaml` 提交到公开仓库。密码类输入框若留空，保存时**不会覆盖** `.env` 里已有的 Key。
 
 ## 云端定时推送（GitHub Actions）
 
