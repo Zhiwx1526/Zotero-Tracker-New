@@ -1,0 +1,67 @@
+name: Daily Literature Push
+
+on:
+  schedule:
+    # GitHub Actions uses UTC; 01:00 UTC = 09:00 China Standard Time.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-literature-push
+  cancel-in-progress: false
+
+jobs:
+  run-tracker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Asia/Shanghai
+      ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
+      ZOTERO_KEY: ${{ secrets.ZOTERO_KEY }}
+      RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+      SENDER: ${{ secrets.SENDER }}
+      SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
+      LLM_MODEL: ${{ secrets.LLM_MODEL }}
+      LLM_LANGUAGE: ${{ secrets.LLM_LANGUAGE }}
+      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+      EMBEDDING_API_BASE: ${{ secrets.EMBEDDING_API_BASE }}
+      EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run zotero tracker
+        shell: bash
+        run: |
+          uv run python -m zotero_tracker.main \
+            zotero.user_id="${ZOTERO_ID}" \
+            zotero.api_key="${ZOTERO_KEY}" \
+            email.receiver="${RECEIVER_EMAIL}" \
+            email.sender="${SENDER}" \
+            email.sender_password="${SENDER_PASSWORD}" \
+            email.smtp_server="${SMTP_SERVER}" \
+            email.smtp_port="${SMTP_PORT}" \
+            llm.api.key="${OPENAI_API_KEY}" \
+            llm.api.base_url="${OPENAI_API_BASE}" \
+            llm.generation_kwargs.model="${LLM_MODEL}" \
+            llm.language="${LLM_LANGUAGE}"

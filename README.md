@@ -45,6 +45,41 @@ uv run zotero-tracker-web
 
 注意：敏感字段（API Key）会写入本地 `config/custom.yaml`，请勿提交到公开仓库。
 
+## 云端定时推送（GitHub Actions）
+
+仓库已提供工作流：`.github/workflows/daily-push.yml`，支持两种触发方式：
+
+- `schedule`：每日定时执行（当前为 `0 1 * * *`，即 UTC 01:00）。
+- `workflow_dispatch`：在 GitHub 页面手动点击执行。
+
+### 1) 配置仓库 Secrets
+
+在 GitHub 仓库中进入 `Settings -> Secrets and variables -> Actions`，添加以下 `Repository secrets`：
+
+- `ZOTERO_ID`
+- `ZOTERO_KEY`
+- `RECEIVER_EMAIL`
+- `SENDER`
+- `SENDER_PASSWORD`
+- `SMTP_SERVER`
+- `SMTP_PORT`
+- `OPENAI_API_KEY`
+- `OPENAI_API_BASE`
+- `LLM_MODEL`
+- `LLM_LANGUAGE`
+
+说明：
+
+- `LLM_LANGUAGE` 建议填 `zh`（需要英文可填 `English`）。
+- GitHub Actions 的 cron 使用 **UTC** 时区；例如 `0 1 * * *` 对应中国时间 `09:00`。
+- 若你已在 `config/custom.yaml` 固定了部分配置，也建议在 Secrets 中统一维护敏感信息，避免明文进入仓库历史。
+
+### 2) 手动触发与查看日志
+
+1. 打开仓库 `Actions` 页面，选择 `Daily Literature Push`。
+2. 点击 `Run workflow` 手动触发一次。
+3. 进入该次运行查看 `Run zotero tracker` 步骤日志，确认抓取、排序与邮件发送流程正常。
+
 ## 邮件反馈闭环（最小签名）
 
 支持在邮件每条论文后附加 `相关/不相关` 点击反馈，用于下一轮规则重排。
