@@ -20,7 +20,7 @@ from .feedback import (
 )
 from .keywords import KeywordResult, extract_keywords_from_corpus, match_keywords_in_paper
 from .markdown_report import render_html, render_markdown
-from .protocol import CorpusPaper, Paper
+from .protocol import CorpusPaper, Paper, fill_briefing_intro
 from .reranker import get_reranker_cls
 from .retriever import get_retriever_cls
 from .utils_glob import glob_match
@@ -160,6 +160,7 @@ class Executor:
         logger.info(f"候选论文总数：{len(all_papers)}")
         reranked: list = []
         feedback_links: dict[str, dict[str, str]] = {}
+        briefing_intro: str | None = None
         if all_papers:
             logger.info("按与书库的向量相似度重排中…")
             reranked = self.reranker.rerank(all_papers, corpus)
@@ -186,6 +187,24 @@ class Executor:
             logger.info("正在生成一句话摘要…")
             for p in tqdm(reranked):
                 p.generate_tldr(self.openai_client, self.config.llm)
+            ne_cfg = self.config.llm.get("natural_explain") or {}
+            if bool(ne_cfg.get("enabled", False)):
+                max_ne = ne_cfg.get("max_papers")
+                to_explain = reranked if max_ne is None else reranked[: int(max_ne)]
+                logger.info(f"正在生成自然语言推荐解读（{len(to_explain)} 篇）…")
+                for p in tqdm(to_explain):
+                    p.fill_natural_explain(self.openai_client, self.config.llm)
+            br_cfg = self.config.llm.get("briefing") or {}
+            if bool(br_cfg.get("enabled", False)) and reranked:
+                logger.info("正在生成今日简报导语…")
+                date_label = datetime.now().strftime("%Y-%m-%d")
+                briefing_intro = fill_briefing_intro(
+                    self.openai_client,
+                    self.config.llm,
+                    reranked,
+                    kw.terms,
+                    date_label,
+                )
             if fb_cfg and bool(fb_cfg.get("enabled", False)):
                 base_url = str(fb_cfg.get("base_url", "")).strip()
                 secret = str(fb_cfg.get("secret", "")).strip()
@@ -215,8 +234,18 @@ class Executor:
             logger.info("无候选论文且 send_empty=false，不发送邮件。")
             return None
 
-        md = render_markdown(reranked, kw, feedback_links=feedback_links)
-        html = render_html(reranked, kw, feedback_links=feedback_links)
+        md = render_markdown(
+            reranked,
+            kw,
+            feedback_links=feedback_links,
+            briefing_intro=briefing_intro,
+        )
+        html = render_html(
+            reranked,
+            kw,
+            feedback_links=feedback_links,
+            briefing_intro=briefing_intro,
+        )
         logger.info("正在发送邮件…")
         send_markdown_email(self.config, md, html_body=html)
         logger.info("全部完成。")

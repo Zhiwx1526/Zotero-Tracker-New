@@ -165,7 +165,40 @@ def _render_form(cfg: DictConfig) -> dict[str, Any]:
         llm_model = st.text_input(
             "llm.generation_kwargs.model",
             value=_clean_text(cfg.llm.generation_kwargs.get("model")),
-            help="用于 TLDR 生成的模型名。",
+            help="用于 TLDR、推荐解读与简报导语的模型名（均为 chat 补全）。",
+        )
+        ne_m = cfg.llm.get("natural_explain") or {}
+        natural_explain_enabled = st.toggle(
+            "llm.natural_explain.enabled（自然语言推荐解读）",
+            value=bool(ne_m.get("enabled", False)),
+            help="对邮件中的论文额外调用 LLM，生成 2～4 句「推荐解读」（会增加 API 费用与耗时）。",
+            key="llm_natural_explain_enabled",
+        )
+        ne_max_raw = ne_m.get("max_papers")
+        natural_explain_max_papers = st.number_input(
+            "llm.natural_explain.max_papers（0=不限制篇数）",
+            min_value=0,
+            max_value=500,
+            value=0 if ne_max_raw is None else int(ne_max_raw),
+            step=1,
+            help="仅对前 N 篇生成推荐解读；填 0 表示对邮件中的全部候选篇生成。",
+            key="llm_natural_explain_max",
+        )
+        br_m = cfg.llm.get("briefing") or {}
+        briefing_enabled = st.toggle(
+            "llm.briefing.enabled（今日简报导语）",
+            value=bool(br_m.get("enabled", False)),
+            help="每封邮件额外 1 次 LLM 调用，在正文开头生成「今日简报」段落。",
+            key="llm_briefing_enabled",
+        )
+        briefing_max_papers = st.number_input(
+            "llm.briefing.max_papers",
+            min_value=1,
+            max_value=50,
+            value=max(1, int(br_m.get("max_papers", 15))),
+            step=1,
+            help="写入简报 prompt 的最多篇数（标题+一句话摘要），避免上下文过长。",
+            key="llm_briefing_max",
         )
 
     with st.container(border=True):
@@ -229,6 +262,10 @@ def _render_form(cfg: DictConfig) -> dict[str, Any]:
         "llm_key": llm_key,
         "llm_base_url": llm_base_url,
         "llm_model": llm_model,
+        "natural_explain_enabled": natural_explain_enabled,
+        "natural_explain_max_papers": natural_explain_max_papers,
+        "briefing_enabled": briefing_enabled,
+        "briefing_max_papers": briefing_max_papers,
         "min_score_input": min_score_input,
         "explain_enabled": explain_enabled,
         "feedback_enabled": feedback_enabled,
@@ -258,6 +295,15 @@ def _apply_form_to_custom(custom_cfg: DictConfig, form_data: dict[str, Any]) -> 
     custom_cfg.llm.api.key = "${oc.env:OPENAI_API_KEY,???}"
     custom_cfg.llm.api.base_url = "${oc.env:OPENAI_API_BASE,???}"
     custom_cfg.llm.generation_kwargs.model = "${oc.env:LLM_MODEL,???}"
+    if custom_cfg.llm.get("natural_explain") is None:
+        custom_cfg.llm.natural_explain = OmegaConf.create({})
+    custom_cfg.llm.natural_explain.enabled = bool(form_data["natural_explain_enabled"])
+    ne_max = int(form_data["natural_explain_max_papers"])
+    custom_cfg.llm.natural_explain.max_papers = None if ne_max <= 0 else ne_max
+    if custom_cfg.llm.get("briefing") is None:
+        custom_cfg.llm.briefing = OmegaConf.create({})
+    custom_cfg.llm.briefing.enabled = bool(form_data["briefing_enabled"])
+    custom_cfg.llm.briefing.max_papers = max(1, int(form_data["briefing_max_papers"]))
     custom_cfg.executor.min_score = min_score
     custom_cfg.executor.explain_enabled = bool(form_data["explain_enabled"])
 
@@ -376,6 +422,9 @@ def main() -> None:
                     st.caption(f"来源 {paper.source} · 相关度 {sc}")
                     if paper.tldr:
                         st.write(paper.tldr)
+                    if (paper.natural_explain or "").strip():
+                        st.markdown("**推荐解读**")
+                        st.write(paper.natural_explain)
                     st.markdown("**为什么推荐给你**")
                     if paper.matched_keywords:
                         st.write("命中关键词：" + ", ".join(paper.matched_keywords))

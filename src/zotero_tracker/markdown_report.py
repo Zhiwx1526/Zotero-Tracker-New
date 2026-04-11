@@ -102,14 +102,29 @@ def render_markdown(
     *,
     date: datetime | None = None,
     feedback_links: dict[str, dict[str, str]] | None = None,
+    briefing_intro: str | None = None,
 ) -> str:
     date = date or datetime.now()
     lines: list[str] = [
         f"# Zotero 文献追踪 — {date.strftime('%Y-%m-%d')}",
         "",
-        "## 兴趣关键词（来自你的书库）",
-        "",
     ]
+    bi = (briefing_intro or "").strip()
+    if bi:
+        lines.extend(
+            [
+                "## 今日简报",
+                "",
+                bi,
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## 兴趣关键词（来自你的书库）",
+            "",
+        ]
+    )
     if keywords.terms:
         lines.append(", ".join(f"`{t}`" for t in keywords.terms))
     else:
@@ -135,6 +150,9 @@ def render_markdown(
         if p.pdf_url:
             lines.append(f"- **PDF：** {p.pdf_url}")
         lines.append(f"- **一句话摘要：** {tldr}")
+        ne = (p.natural_explain or "").strip()
+        if ne:
+            lines.append(f"- **推荐解读：** {ne.replace(chr(10), ' ')}")
         lines.extend(_markdown_why_lines(p))
         pid = paper_item_id(p)
         item_feedback = (feedback_links or {}).get(pid, {})
@@ -157,16 +175,29 @@ def render_html(
     *,
     date: datetime | None = None,
     feedback_links: dict[str, dict[str, str]] | None = None,
+    briefing_intro: str | None = None,
 ) -> str:
     date = date or datetime.now()
     kws = ", ".join(escape(t) for t in keywords.terms) if keywords.terms else "未能提取关键词。"
     parts: list[str] = [
         "<html><body style='font-family:Arial,sans-serif;line-height:1.55;color:#111;'>",
         f"<h2 style='margin-bottom:8px;'>Zotero 文献追踪 — {date.strftime('%Y-%m-%d')}</h2>",
-        "<h3 style='margin-bottom:6px;'>兴趣关键词（来自你的书库）</h3>",
-        f"<p style='margin-top:0;'>{kws}</p>",
-        "<h3>论文列表</h3>",
     ]
+    bi = (briefing_intro or "").strip()
+    if bi:
+        parts.extend(
+            [
+                "<h3 style='margin-bottom:6px;'>今日简报</h3>",
+                f"<p style='margin:0 0 14px 0;'>{escape(bi).replace(chr(10), '<br/>')}</p>",
+            ]
+        )
+    parts.extend(
+        [
+            "<h3 style='margin-bottom:6px;'>兴趣关键词（来自你的书库）</h3>",
+            f"<p style='margin-top:0;'>{kws}</p>",
+            "<h3>论文列表</h3>",
+        ]
+    )
     if not papers:
         parts.append("<p>今日暂无匹配论文。</p></body></html>")
         return "".join(parts)
@@ -196,6 +227,12 @@ def render_html(
                 f"<a href='{escape(p.pdf_url)}' target='_blank'>下载 PDF</a></p>"
             )
         parts.append(f"<p style='margin:6px 0 10px 0;'><b>一句话摘要：</b> {tldr}</p>")
+        ne = (p.natural_explain or "").strip()
+        if ne:
+            ne_html = escape(ne).replace("\n", "<br/>")
+            parts.append(
+                f"<p style='margin:6px 0 10px 0;'><b>推荐解读：</b> {ne_html}</p>"
+            )
         parts.append(_html_why_block(p))
         if rel_link or irrel_link:
             parts.append("<div>")

@@ -44,6 +44,7 @@ uv run zotero-tracker-web
 - `zotero.user_id` / `zotero.api_key`：对应环境变量 `ZOTERO_ID`、`ZOTERO_KEY`。
 - `email.receiver`：对应 `RECEIVER_EMAIL`（同时写入 `RECEIVER` 以兼容旧习惯）。
 - `llm.api.key` / `llm.api.base_url` / `llm.generation_kwargs.model`：对应 `OPENAI_API_KEY`、`OPENAI_API_BASE`、`LLM_MODEL`。
+- `llm.natural_explain` / `llm.briefing`（可选）：`natural_explain.enabled` 为每篇邮件论文生成自然语言「推荐解读」（默认关闭，会显著增加 chat 调用次数）；`briefing.enabled` 为每封邮件生成开头「今日简报」段落（默认关闭，每封多 1 次调用）。二者均受 `llm.language` 与同一模型配置约束，详见 `config/base.yaml` 中注释与 `max_papers` 说明。
 - `source.<platform>.enabled` / `source.<platform>.days`：各来源开关与日期窗口。
 - `executor.min_score`：相似度过滤阈值（留空表示不启用）。
 

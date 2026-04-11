@@ -3,7 +3,7 @@ zotero:
   api_key: ${oc.env:ZOTERO_KEY,???}
 email:
   sender: ${oc.env:SENDER,???}
-  receiver: ${oc.env:RECEIVER,???}
+  receiver: ${oc.env:RECEIVER_EMAIL,???}
   smtp_server: ${oc.env:SMTP_SERVER,smtp.qq.com}
   smtp_port: ${oc.env:SMTP_PORT,465}
   sender_password: ${oc.env:SENDER_PASSWORD,???}
@@ -14,6 +14,12 @@ llm:
   generation_kwargs:
     model: ${oc.env:LLM_MODEL,???}
   language: ${oc.env:LLM_LANGUAGE,zh}
+  natural_explain:
+    enabled: true
+    max_papers: 3
+  briefing:
+    enabled: true
+    max_papers: 5
 reranker:
   api:
     batch_size: 10
@@ -28,7 +34,7 @@ source:
     - cs.CV
     - cs.LG
     - cs.CL
-    days: 2
+    days: 3
     max_results: 2000
   biorxiv:
     enabled: false

@@ -56,6 +56,16 @@ llm:
     model: ???
   # 与 custom 中 LLM_LANGUAGE 一致；也可写 简体中文（纯 YAML 无插值时中文合法）
   language: zh
+  # 逐篇自然语言「推荐解读」（额外 API 调用；默认关闭以免费用倍增）
+  natural_explain:
+    enabled: false
+    # null 表示对邮件中的全部候选篇生成；设为正整数则仅前 N 篇
+    max_papers: null
+  # 邮件开头「今日简报」（每封额外 1 次调用；默认关闭）
+  briefing:
+    enabled: false
+    # 写入简报 prompt 的最大篇数（标题+一句话摘要）
+    max_papers: 15
 
 reranker:
   api:
