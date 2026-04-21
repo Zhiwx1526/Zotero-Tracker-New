@@ -150,6 +150,8 @@ class OpenAlexRetriever(BaseRetriever):
             if str(c.get("display_name") or "").strip()
         ]
         item_id = str(raw_paper.get("id") or "").rstrip("/").split("/")[-1]
+        doi_raw = raw_paper.get("doi")
+        doi_s = str(doi_raw).strip() if doi_raw else None
 
         return Paper(
             source=self.name,
@@ -160,4 +162,5 @@ class OpenAlexRetriever(BaseRetriever):
             pdf_url=str(pdf_url) if pdf_url else None,
             item_id=item_id or None,
             tags=tags,
+            doi=doi_s or None,
         )

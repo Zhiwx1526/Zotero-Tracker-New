@@ -82,6 +82,8 @@ class Paper:
     matched_keywords: list[str] = field(default_factory=list)
     corpus_explanations: list[CorpusMatchExplain] = field(default_factory=list)
     natural_explain: Optional[str] = None
+    doi: Optional[str] = None
+    merged_sources: list[str] = field(default_factory=list)
 
     def _generate_tldr_with_llm(self, openai_client: OpenAI, llm_params: Any) -> str:
         # 配置里默认用 zh（避免 OmegaConf 在 ${oc.env:...,中文} 里解析失败）；环境变量可写 简体中文
@@ -304,3 +306,4 @@ class CorpusPaper:
     abstract: str
     added_date: datetime
     paths: list[str]
+    doi: Optional[str] = None

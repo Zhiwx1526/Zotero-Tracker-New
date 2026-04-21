@@ -37,15 +37,15 @@ source:
     days: 3
     max_results: 2000
   biorxiv:
-    enabled: false
-    days: 1
+    enabled: true
+    days: 2
     max_results: 200
     timeout_seconds: 120
     num_retries: 3
     retry_backoff_seconds: 2
   medrxiv:
-    enabled: false
-    days: 1
+    enabled: true
+    days: 2
     max_results: 200
     timeout_seconds: 120
     num_retries: 3
@@ -63,9 +63,11 @@ source:
 executor:
   explain_enabled: true
   debug: ${oc.env:DEBUG,false}
-  min_score: 3.6
+  min_score: 3.7
   source_error_policy: continue
   source:
   - arxiv
+  - biorxiv
+  - medrxiv
 feedback:
   enabled: true

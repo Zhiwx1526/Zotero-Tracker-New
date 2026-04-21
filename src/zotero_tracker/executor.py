@@ -1,6 +1,7 @@
 """串联：Zotero 语料 → 关键词 → 各来源检索 → 重排 → TLDR → Markdown 邮件。"""
 
 import random
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
@@ -18,12 +19,28 @@ from .feedback import (
     hash_user_id,
     paper_item_id,
 )
+from .dedupe import apply_dedupe_pipeline
 from .keywords import KeywordResult, extract_keywords_from_corpus, match_keywords_in_paper
 from .markdown_report import render_html, render_markdown
 from .protocol import CorpusPaper, Paper, fill_briefing_intro
 from .reranker import get_reranker_cls
 from .retriever import get_retriever_cls
 from .utils_glob import glob_match
+
+
+def _zotero_raw_doi(data: dict) -> str | None:
+    for key in ("DOI", "doi"):
+        v = data.get(key)
+        if v and str(v).strip():
+            return str(v).strip()
+    extra = str(data.get("extra") or "")
+    m = re.search(r"(?:^|\n)\s*DOI:\s*(10\.\d{4,9}/\S+)", extra, re.IGNORECASE | re.MULTILINE)
+    if m:
+        return m.group(1).rstrip(".,)")
+    m = re.search(r"\b(10\.\d{4,9}/[^\s]+)", extra)
+    if m:
+        return m.group(1).rstrip(".,)")
+    return None
 
 
 def normalize_path_patterns(
@@ -88,6 +105,7 @@ class Executor:
                 abstract=c["data"]["abstractNote"],
                 added_date=datetime.strptime(c["data"]["dateAdded"], "%Y-%m-%dT%H:%M:%SZ"),
                 paths=c["paths"],
+                doi=_zotero_raw_doi(c["data"]),
             )
             for c in corpus
         ]
@@ -158,6 +176,15 @@ class Executor:
             logger.warning(f"以下来源失败并已跳过：{failed_text}")
 
         logger.info(f"候选论文总数：{len(all_papers)}")
+        all_papers, _dedupe_stats = apply_dedupe_pipeline(all_papers, corpus, self.config.executor)
+        if _dedupe_stats.get("merged") or _dedupe_stats.get("library_dropped"):
+            logger.info(
+                "去重统计：合并重复 {} 篇，书库剔除 {} 篇；剩余候选 {} 篇。".format(
+                    _dedupe_stats.get("merged", 0),
+                    _dedupe_stats.get("library_dropped", 0),
+                    len(all_papers),
+                )
+            )
         reranked: list = []
         feedback_links: dict[str, dict[str, str]] = {}
         briefing_intro: str | None = None

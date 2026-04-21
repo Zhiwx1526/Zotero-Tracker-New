@@ -51,6 +51,7 @@ class BiorxivRetriever(BaseRetriever):
 
         pdf_url = str(raw_paper.get("biorxiv_pdf_url") or "").strip() or None
 
+        canon_doi = (rel_doi or doi or "").strip() or None
         return Paper(
             source=self.name,
             title=title,
@@ -60,5 +61,6 @@ class BiorxivRetriever(BaseRetriever):
             pdf_url=pdf_url,
             item_id=(doi or rel_doi or None),
             tags=["biorxiv"],
+            doi=canon_doi,
         )
 

@@ -92,6 +92,20 @@ def _build_env_updates_from_form(form_data: dict[str, Any]) -> dict[str, str]:
     if recv:
         updates["RECEIVER"] = recv
 
+    sender = form_data["email_sender"].strip()
+    if sender:
+        updates["SENDER"] = sender
+
+    smtp_server = form_data["email_smtp_server"].strip()
+    if smtp_server:
+        updates["SMTP_SERVER"] = smtp_server
+
+    updates["SMTP_PORT"] = str(int(form_data["email_smtp_port"]))
+
+    spw = form_data["email_sender_password"].strip()
+    if spw:
+        updates["SENDER_PASSWORD"] = spw
+
     lk = form_data["llm_key"].strip()
     if lk:
         updates["OPENAI_API_KEY"] = lk
@@ -110,6 +124,16 @@ def _build_env_updates_from_form(form_data: dict[str, Any]) -> dict[str, str]:
 def _clean_text(value: Any) -> str:
     text = str(value or "").strip()
     return "" if text == "???" else text
+
+
+def _smtp_port_for_form(cfg: DictConfig) -> int:
+    raw = cfg.email.get("smtp_port") if cfg.email else None
+    if raw is None:
+        return 465
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 465
 
 
 def _get_source(cfg: DictConfig, source: str) -> DictConfig:
@@ -143,10 +167,34 @@ def _render_form(cfg: DictConfig) -> dict[str, Any]:
 
     with st.container(border=True):
         st.markdown("### Email")
+        email_sender = st.text_input(
+            "email.sender",
+            value=_clean_text(cfg.email.get("sender")),
+            help="发件邮箱地址（与 SMTP 登录账号通常一致）。保存后写入 `.env` 的 `SENDER`。",
+        )
         email_receiver = st.text_input(
             "email.receiver",
             value=_clean_text(cfg.email.get("receiver")),
             help="推送结果的收件邮箱地址。",
+        )
+        email_smtp_server = st.text_input(
+            "email.smtp_server",
+            value=_clean_text(cfg.email.get("smtp_server")),
+            help="SMTP 服务器主机名，例如 smtp.qq.com。保存后写入 `.env` 的 `SMTP_SERVER`。",
+        )
+        email_smtp_port = st.number_input(
+            "email.smtp_port",
+            min_value=1,
+            max_value=65535,
+            value=_smtp_port_for_form(cfg),
+            step=1,
+            help="SMTP 端口；465 多为 SSL，587 多为 STARTTLS。保存后写入 `.env` 的 `SMTP_PORT`。",
+        )
+        email_sender_password = st.text_input(
+            "email.sender_password",
+            value=_clean_text(cfg.email.get("sender_password")),
+            type="password",
+            help="SMTP 密码或授权码。",
         )
 
     with st.container(border=True):
@@ -258,7 +306,11 @@ def _render_form(cfg: DictConfig) -> dict[str, Any]:
     return {
         "zotero_user_id": zotero_user_id,
         "zotero_api_key": zotero_api_key,
+        "email_sender": email_sender,
         "email_receiver": email_receiver,
+        "email_smtp_server": email_smtp_server,
+        "email_smtp_port": email_smtp_port,
+        "email_sender_password": email_sender_password,
         "llm_key": llm_key,
         "llm_base_url": llm_base_url,
         "llm_model": llm_model,
@@ -291,7 +343,11 @@ def _apply_form_to_custom(custom_cfg: DictConfig, form_data: dict[str, Any]) -> 
     # 敏感字段通过环境变量注入；YAML 中只保留 oc.env 引用，避免密钥落盘到 custom.yaml
     custom_cfg.zotero.user_id = "${oc.env:ZOTERO_ID,???}"
     custom_cfg.zotero.api_key = "${oc.env:ZOTERO_KEY,???}"
+    custom_cfg.email.sender = "${oc.env:SENDER,???}"
     custom_cfg.email.receiver = "${oc.env:RECEIVER_EMAIL,???}"
+    custom_cfg.email.smtp_server = "${oc.env:SMTP_SERVER,smtp.qq.com}"
+    custom_cfg.email.smtp_port = "${oc.env:SMTP_PORT,465}"
+    custom_cfg.email.sender_password = "${oc.env:SENDER_PASSWORD,???}"
     custom_cfg.llm.api.key = "${oc.env:OPENAI_API_KEY,???}"
     custom_cfg.llm.api.base_url = "${oc.env:OPENAI_API_BASE,???}"
     custom_cfg.llm.generation_kwargs.model = "${oc.env:LLM_MODEL,???}"

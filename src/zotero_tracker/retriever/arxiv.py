@@ -103,6 +103,8 @@ class ArxivRetriever(BaseRetriever):
         primary_cat = getattr(raw_paper, "primary_category", None)
         if primary_cat:
             tags.append(str(primary_cat).strip().lower())
+        arxiv_doi = getattr(raw_paper, "doi", None)
+        doi_s = str(arxiv_doi).strip() if arxiv_doi else None
         return Paper(
             source=self.name,
             title=title,
@@ -112,4 +114,5 @@ class ArxivRetriever(BaseRetriever):
             pdf_url=raw_paper.pdf_url,
             item_id=paper_id or None,
             tags=tags,
+            doi=doi_s or None,
         )

@@ -50,6 +50,7 @@ class MedrxivRetriever(BaseRetriever):
 
         pdf_url = str(raw_paper.get("medrxiv_pdf_url") or "").strip() or None
 
+        canon_doi = (rel_doi or doi or "").strip() or None
         return Paper(
             source=self.name,
             title=title,
@@ -59,5 +60,6 @@ class MedrxivRetriever(BaseRetriever):
             pdf_url=pdf_url,
             item_id=(doi or rel_doi or None),
             tags=["medrxiv"],
+            doi=canon_doi,
         )
 
