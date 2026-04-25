@@ -17,6 +17,19 @@ def test_render_html_feedback_buttons():
             tldr="summary",
             natural_explain="与书库中机器学习方向条目主题接近。",
             item_id="i1",
+            citation_count=100,
+            journal_name="Nature",
+            journal_sjr=12.3,
+            journal_quartile="Q1",
+            quality_score=8.1,
+            score_breakdown={
+                "final_score": 8.5,
+                "quality_score": 8.1,
+                "relevance": 7.9,
+                "citation": 9.0,
+                "journal": 8.8,
+                "authority": 10.0,
+            },
             matched_keywords=["ai"],
             corpus_explanations=[
                 CorpusMatchExplain(
@@ -48,6 +61,8 @@ def test_render_html_feedback_buttons():
     assert "今日推送以表示学习为主" in html
     assert "推荐解读" in html
     assert "机器学习" in html
+    assert "质量权重分解" in html
+    assert "引用量原值" in html
 
 
 def test_render_markdown_briefing_and_natural_explain():
@@ -61,6 +76,14 @@ def test_render_markdown_briefing_and_natural_explain():
             score=0.5,
             tldr="tldr2",
             natural_explain="第二篇的解读。",
+            score_breakdown={
+                "final_score": 5.0,
+                "quality_score": 3.0,
+                "relevance": 5.0,
+                "citation": 0.0,
+                "journal": 0.0,
+                "authority": 0.0,
+            },
             corpus_explanations=[],
         )
     ]
@@ -74,3 +97,4 @@ def test_render_markdown_briefing_and_natural_explain():
     assert "简报开头" in md
     assert "**推荐解读：**" in md
     assert "第二篇的解读" in md
+    assert "#### 质量权重分解" in md

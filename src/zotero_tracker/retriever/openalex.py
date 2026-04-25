@@ -139,6 +139,7 @@ class OpenAlexRetriever(BaseRetriever):
             abstract = str(raw_paper.get("abstract") or "").strip()
 
         primary = raw_paper.get("primary_location") or {}
+        primary_source = primary.get("source") or {}
         pdf_url = primary.get("pdf_url") or raw_paper.get("open_access", {}).get("oa_url")
         url = raw_paper.get("id") or primary.get("landing_page_url")
         if not url:
@@ -152,6 +153,9 @@ class OpenAlexRetriever(BaseRetriever):
         item_id = str(raw_paper.get("id") or "").rstrip("/").split("/")[-1]
         doi_raw = raw_paper.get("doi")
         doi_s = str(doi_raw).strip() if doi_raw else None
+        cited_by_count_raw = raw_paper.get("cited_by_count")
+        citation_count = int(cited_by_count_raw) if isinstance(cited_by_count_raw, (int, float)) else None
+        journal_name = str(primary_source.get("display_name") or "").strip() or None
 
         return Paper(
             source=self.name,
@@ -163,4 +167,6 @@ class OpenAlexRetriever(BaseRetriever):
             item_id=item_id or None,
             tags=tags,
             doi=doi_s or None,
+            citation_count=citation_count,
+            journal_name=journal_name,
         )

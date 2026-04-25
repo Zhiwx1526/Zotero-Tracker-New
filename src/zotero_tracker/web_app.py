@@ -476,6 +476,8 @@ def main() -> None:
                     st.markdown(f"**{idx}.** [{paper.title}]({paper.url})")
                     sc = f"{paper.score:.3f}" if paper.score is not None else "—"
                     st.caption(f"来源 {paper.source} · 相关度 {sc}")
+                    if paper.quality_score is not None:
+                        st.caption(f"质量分（不含相关性）{paper.quality_score:.3f}")
                     if paper.tldr:
                         st.write(paper.tldr)
                     if (paper.natural_explain or "").strip():
@@ -500,6 +502,32 @@ def main() -> None:
                         st.dataframe(rows, use_container_width=True, hide_index=True)
                     else:
                         st.caption("无书库分解（未启用或暂无条目）。")
+                    if paper.score_breakdown:
+                        st.markdown("**质量权重分解**")
+                        st.dataframe(
+                            [
+                                {
+                                    "最终分数": round(float(paper.score_breakdown.get("final_score", 0.0)), 3),
+                                    "相关性分": round(float(paper.score_breakdown.get("relevance", 0.0)), 3),
+                                    "引用量分": round(float(paper.score_breakdown.get("citation", 0.0)), 3),
+                                    "期刊权威度分": round(float(paper.score_breakdown.get("journal", 0.0)), 3),
+                                    "来源权威度分": round(float(paper.score_breakdown.get("authority", 0.0)), 3),
+                                }
+                            ],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                        extra_info: list[str] = []
+                        if paper.citation_count is not None:
+                            extra_info.append(f"引用量原值 {paper.citation_count}")
+                        if paper.journal_name:
+                            extra_info.append(f"期刊 {paper.journal_name}")
+                        if paper.journal_sjr is not None or paper.journal_quartile:
+                            sjr_s = "—" if paper.journal_sjr is None else f"{paper.journal_sjr:.3f}"
+                            q_s = paper.journal_quartile or "—"
+                            extra_info.append(f"SJR/分区 {sjr_s}/{q_s}")
+                        if extra_info:
+                            st.caption(" · ".join(extra_info))
 
 
 def run_streamlit() -> None:

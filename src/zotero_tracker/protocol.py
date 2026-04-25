@@ -84,6 +84,13 @@ class Paper:
     natural_explain: Optional[str] = None
     doi: Optional[str] = None
     merged_sources: list[str] = field(default_factory=list)
+    citation_count: Optional[int] = None
+    journal_name: Optional[str] = None
+    journal_sjr: Optional[float] = None
+    journal_quartile: Optional[str] = None
+    source_authority_score: Optional[float] = None
+    quality_score: Optional[float] = None
+    score_breakdown: dict[str, float] = field(default_factory=dict)
 
     def _generate_tldr_with_llm(self, openai_client: OpenAI, llm_params: Any) -> str:
         # 配置里默认用 zh（避免 OmegaConf 在 ${oc.env:...,中文} 里解析失败）；环境变量可写 简体中文

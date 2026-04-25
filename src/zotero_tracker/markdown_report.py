@@ -43,6 +43,26 @@ def _markdown_why_lines(p: Paper) -> list[str]:
             "",
         ]
     )
+    if p.score_breakdown:
+        lines.append("#### 质量权重分解")
+        lines.append("")
+        lines.append(f"- **最终分数：** {p.score_breakdown.get('final_score', p.score or 0.0):.3f}")
+        q_score = p.score_breakdown.get("quality_score")
+        if q_score is not None:
+            lines.append(f"- **质量分（不含相关性）：** {q_score:.3f}")
+        lines.append(f"- **相关性分：** {p.score_breakdown.get('relevance', 0.0):.3f}")
+        lines.append(f"- **引用量分：** {p.score_breakdown.get('citation', 0.0):.3f}")
+        lines.append(f"- **期刊权威度分：** {p.score_breakdown.get('journal', 0.0):.3f}")
+        lines.append(f"- **来源权威度分：** {p.score_breakdown.get('authority', 0.0):.3f}")
+        if p.citation_count is not None:
+            lines.append(f"- **引用量原值：** {p.citation_count}")
+        if p.journal_name:
+            lines.append(f"- **期刊：** {p.journal_name}")
+        if p.journal_sjr is not None or p.journal_quartile:
+            sjr_s = "—" if p.journal_sjr is None else f"{p.journal_sjr:.3f}"
+            q_s = p.journal_quartile or "—"
+            lines.append(f"- **SJR / 分区：** {sjr_s} / {q_s}")
+        lines.append("")
     return lines
 
 
@@ -86,13 +106,35 @@ def _html_why_block(p: Paper) -> str:
         "分解基于向量相似度与时间衰减；若启用邮件反馈加权，最终相关度可能已单独调整。"
         "</p>"
     )
+    quality_html = ""
+    if p.score_breakdown:
+        quality_html = (
+            "<h5 style='margin:12px 0 6px 0;'>质量权重分解</h5>"
+            "<ul style='margin:6px 0 0 20px;padding:0;'>"
+            f"<li>最终分数：{p.score_breakdown.get('final_score', p.score or 0.0):.3f}</li>"
+            f"<li>质量分（不含相关性）：{float(p.score_breakdown.get('quality_score', 0.0)):.3f}</li>"
+            f"<li>相关性分：{float(p.score_breakdown.get('relevance', 0.0)):.3f}</li>"
+            f"<li>引用量分：{float(p.score_breakdown.get('citation', 0.0)):.3f}</li>"
+            f"<li>期刊权威度分：{float(p.score_breakdown.get('journal', 0.0)):.3f}</li>"
+            f"<li>来源权威度分：{float(p.score_breakdown.get('authority', 0.0)):.3f}</li>"
+            "</ul>"
+        )
+        if p.citation_count is not None:
+            quality_html += f"<p style='margin:6px 0;'><b>引用量原值：</b> {int(p.citation_count)}</p>"
+        if p.journal_name:
+            quality_html += f"<p style='margin:6px 0;'><b>期刊：</b> {escape(p.journal_name)}</p>"
+        if p.journal_sjr is not None or p.journal_quartile:
+            sjr_s = "—" if p.journal_sjr is None else f"{p.journal_sjr:.3f}"
+            q_s = p.journal_quartile or "—"
+            quality_html += f"<p style='margin:6px 0;'><b>SJR / 分区：</b> {sjr_s} / {escape(q_s)}</p>"
+
     return (
         "<h5 style='margin:12px 0 6px 0;'>为什么推荐给你</h5>"
         f"<p style='margin:4px 0;'><b>命中关键词：</b> {kw_html}</p>"
         "<p style='margin:4px 0;font-size:13px;'>"
         "书库依据（按对「相关度」总分的贡献从高到低；相关度 = 10 × Σ 余弦相似度 × 时间权重）："
         "</p>"
-        f"{table}{note}"
+        f"{table}{note}{quality_html}"
     )
 
 

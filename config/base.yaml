@@ -108,6 +108,25 @@ executor:
   explain_enabled: true     
   explain_top_k: 2     # 为什么推荐 条数
   explain_title_max_len: 80
+  quality_ranking:
+    enabled: false
+    # redistribute: 指标缺失时将权重按可用指标重分配；zero_fill: 缺失按 0 处理
+    fallback_policy: redistribute
+    weights:
+      relevance: 0.7
+      citation: 0.15
+      journal: 0.1
+      authority: 0.05
+
+quality_data:
+  # Scimago 映射文件（CSV，示例列：journal_name,sjr,quartile）
+  scimago_map_path: null
+  sjr_log_cap: 10.0
+  source_authority:
+    openalex: 1.0
+    arxiv: 0.75
+    biorxiv: 0.65
+    medrxiv: 0.65
 
 feedback:
   enabled: false

@@ -35,18 +35,18 @@ source:
     - cs.LG
     - cs.CL
     days: 3
-    max_results: 2000
+    max_results: 100
   biorxiv:
     enabled: true
     days: 2
-    max_results: 200
+    max_results: 100
     timeout_seconds: 120
     num_retries: 3
     retry_backoff_seconds: 2
   medrxiv:
     enabled: true
     days: 2
-    max_results: 200
+    max_results: 100
     timeout_seconds: 120
     num_retries: 3
     retry_backoff_seconds: 2
@@ -58,16 +58,32 @@ source:
     from_publication_date: null
     to_publication_date: null
     per_page: 50
-    max_results: 200
+    max_results: 100
     mailto: ${oc.env:OPENALEX_MAILTO,null}
 executor:
   explain_enabled: true
   debug: ${oc.env:DEBUG,false}
   min_score: 3.7
   source_error_policy: continue
+  quality_ranking:
+    enabled: true
+    fallback_policy: redistribute
+    weights:
+      relevance: 0.65
+      citation: 0.2
+      journal: 0.1
+      authority: 0.05
   source:
   - arxiv
   - biorxiv
   - medrxiv
+quality_data:
+  scimago_map_path: null
+  sjr_log_cap: 10.0
+  source_authority:
+    openalex: 1.0
+    arxiv: 0.75
+    biorxiv: 0.65
+    medrxiv: 0.65
 feedback:
   enabled: true

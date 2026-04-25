@@ -93,6 +93,12 @@ def test_openalex_convert_to_paper_handles_missing_fields():
         "abstract_inverted_index": {"Hello": [0], "world": [1]},
         "primary_location": {"pdf_url": None, "landing_page_url": "https://example.org/paper"},
         "open_access": {"oa_url": "https://example.org/paper.pdf"},
+        "cited_by_count": 123,
+        "primary_location": {
+            "pdf_url": None,
+            "landing_page_url": "https://example.org/paper",
+            "source": {"display_name": "Nature"},
+        },
     }
     paper = retriever.convert_to_paper(raw)
 
@@ -103,6 +109,8 @@ def test_openalex_convert_to_paper_handles_missing_fields():
     assert paper.abstract == "Hello world"
     assert paper.url == "https://openalex.org/W123"
     assert paper.pdf_url == "https://example.org/paper.pdf"
+    assert paper.citation_count == 123
+    assert paper.journal_name == "Nature"
 
     assert retriever.convert_to_paper({"title": "", "id": "x"}) is None
     assert retriever.convert_to_paper({"title": "No URL"}) is None
