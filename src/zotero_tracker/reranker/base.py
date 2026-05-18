@@ -39,9 +39,9 @@ class BaseReranker(ABC):
 
     def _explain_settings(self) -> tuple[bool, int, int]:
         ex = self.config.executor
-        enabled = bool(ex.get("explain_enabled", True))
         top_k = int(ex.get("explain_top_k", 5))
         title_max_len = int(ex.get("explain_title_max_len", 80))
+        enabled = top_k > 0
         return enabled, top_k, title_max_len
 
     def rerank(self, candidates: list[Paper], corpus: list[CorpusPaper]) -> list[Paper]:

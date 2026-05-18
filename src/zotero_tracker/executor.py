@@ -23,8 +23,10 @@ from .dedupe import apply_dedupe_pipeline
 from .keywords import KeywordResult, extract_keywords_from_corpus, match_keywords_in_paper
 from .markdown_report import render_html, render_markdown
 from .protocol import CorpusPaper, Paper, fill_briefing_intro
+from .rag import RagRetriever
 from .reranker import get_reranker_cls
 from .retriever import get_retriever_cls
+from .tqdm_logger import get_tqdm_stream
 from .utils_glob import glob_match
 
 
@@ -80,6 +82,7 @@ class Executor:
             self.retrievers[source] = get_retriever_cls(source)(config)
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
         self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
+        self.rag_retriever = None
 
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("正在从 Zotero 拉取书库…")
@@ -142,6 +145,8 @@ class Executor:
     def run(self) -> RunResult | None:
         corpus = self.fetch_zotero_corpus()
         corpus = self.filter_corpus(corpus)
+        if bool(self.config.executor.get("rag", {}).get("enabled", False)):
+            self.rag_retriever = RagRetriever(self.config, self.openai_client, zotero_corpus=corpus)
         if len(corpus) == 0:
             logger.error(f"未找到可用 Zotero 文献，请检查配置：\n{self.config.zotero}")
             return None
@@ -212,15 +217,51 @@ class Executor:
             for p in reranked:
                 p.matched_keywords = match_keywords_in_paper(kw.terms, p.title, p.abstract)
             logger.info("正在生成一句话摘要…")
-            for p in tqdm(reranked):
-                p.generate_tldr(self.openai_client, self.config.llm)
+            for p in tqdm(reranked, file=get_tqdm_stream()):
+                p.generate_tldr(
+                    self.openai_client,
+                    self.config.llm,
+                )
             ne_cfg = self.config.llm.get("natural_explain") or {}
             if bool(ne_cfg.get("enabled", False)):
                 max_ne = ne_cfg.get("max_papers")
                 to_explain = reranked if max_ne is None else reranked[: int(max_ne)]
                 logger.info(f"正在生成自然语言推荐解读（{len(to_explain)} 篇）…")
-                for p in tqdm(to_explain):
-                    p.fill_natural_explain(self.openai_client, self.config.llm)
+                for p in tqdm(to_explain, file=get_tqdm_stream()):
+                    rag_ctx = (
+                        self.rag_retriever.retrieve(title=p.title, abstract=p.abstract)
+                        if self.rag_retriever
+                        else None
+                    )
+                    rag_refs = []
+                    for h in (rag_ctx.hits if rag_ctx else []):
+                        extra = []
+                        if h.collection_path:
+                            extra.append(h.collection_path)
+                        if h.doi:
+                            extra.append(h.doi)
+                        extra_s = f" | {' | '.join(extra)}" if extra else ""
+                        rag_refs.append(f"{h.title} ({h.score:.3f}){extra_s}")
+                    if rag_ctx:
+                        logger.info("解读 RAG 命中：{}。", "；".join(rag_refs[:3]))
+                    elif self.rag_retriever:
+                        logger.info("解读 RAG 未命中，回退原始提示词。")
+                    top_ex = p.corpus_explanations[:3]
+                    corpus_evidence_text = "\n".join(
+                        [
+                            "{}. {} | 余弦 {:.3f} | 时间权重 {:.4f} | 贡献 {:.3f}".format(
+                                i + 1, ex.title, ex.cosine_sim, ex.time_weight, ex.contribution
+                            )
+                            for i, ex in enumerate(top_ex)
+                        ]
+                    )
+                    p.fill_natural_explain(
+                        self.openai_client,
+                        self.config.llm,
+                        rag_context_text=(rag_ctx.context_text if rag_ctx else None),
+                        rag_references=rag_refs,
+                        corpus_evidence_text=corpus_evidence_text,
+                    )
             br_cfg = self.config.llm.get("briefing") or {}
             if bool(br_cfg.get("enabled", False)) and reranked:
                 logger.info("正在生成今日简报导语…")

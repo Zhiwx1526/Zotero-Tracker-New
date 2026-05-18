@@ -9,6 +9,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from ..protocol import Paper
+from ..tqdm_logger import get_tqdm_stream
 from .base import BaseRetriever, register_retriever
 
 # arxiv 库内部 requests 默认无 timeout
@@ -83,7 +84,7 @@ class ArxivRetriever(BaseRetriever):
 
         stuck = _stuck_timer("arXiv API（submittedDate 查询）", _STUCK_WARN_AFTER_S)
         try:
-            raw_papers = list(tqdm(client.results(search), desc="arxiv"))
+            raw_papers = list(tqdm(client.results(search), desc="arxiv", file=get_tqdm_stream()))
         except Exception as exc:
             logger.error(f"arXiv API 失败：{exc}")
             raise

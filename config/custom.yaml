@@ -28,16 +28,16 @@ reranker:
     model: ${oc.env:EMBEDDING_MODEL,text-embedding-v3}
 source:
   arxiv:
-    enabled: true
+    enabled: false
     category:
     - cs.AI
     - cs.CV
     - cs.LG
     - cs.CL
-    days: 3
+    days: 4
     max_results: 100
   biorxiv:
-    enabled: true
+    enabled: false
     days: 2
     max_results: 100
     timeout_seconds: 120
@@ -51,7 +51,7 @@ source:
     num_retries: 3
     retry_backoff_seconds: 2
   openalex:
-    enabled: false
+    enabled: true
     query: null
     search_title_only: false
     days: 15
@@ -61,29 +61,40 @@ source:
     max_results: 100
     mailto: ${oc.env:OPENALEX_MAILTO,null}
 executor:
-  explain_enabled: true
   debug: ${oc.env:DEBUG,false}
-  min_score: 3.7
+  min_score: 4.5
   source_error_policy: continue
   quality_ranking:
     enabled: true
     fallback_policy: redistribute
     weights:
-      relevance: 0.65
-      citation: 0.2
-      journal: 0.1
-      authority: 0.05
+      relevance: 0.9
+      authority: 0.1
+  rag:
+    enabled: true
+    use_zotero_corpus: true
+    zotero_pdf_extract: true
+    zotero_dedupe: true
+    top_k: 3
+    min_retrieval_score: 0.2
+    max_context_chars: 2200
   source:
-  - arxiv
-  - biorxiv
+  - openalex
   - medrxiv
 quality_data:
-  scimago_map_path: null
-  sjr_log_cap: 10.0
   source_authority:
     openalex: 1.0
     arxiv: 0.75
     biorxiv: 0.65
     medrxiv: 0.65
+rag:
+  knowledge_base:
+    paths:
+    - data/rag_knowledge
+    index_path: cache/rag_index.json
+    chunk_size: 1200
+    chunk_overlap: 200
+    embedding_model: ${oc.env:RAG_EMBEDDING_MODEL,${oc.env:EMBEDDING_MODEL,text-embedding-v3}}
+    embedding_batch_size: 32
 feedback:
   enabled: true

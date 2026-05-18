@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 from ..protocol import Paper
+from ..tqdm_logger import get_tqdm_stream
 
 registered_retrievers: dict[str, type["BaseRetriever"]] = {}
 
@@ -46,7 +47,12 @@ class BaseRetriever(ABC):
         sleep_sec = float(self.config.executor.get("retriever_sleep_seconds", 1))
         logger.info("正在转换原始记录为 Paper…")
         papers: list[Paper] = []
-        for raw_paper in tqdm(raw_papers, total=len(raw_papers), desc=f"{self.name}"):
+        for raw_paper in tqdm(
+            raw_papers,
+            total=len(raw_papers),
+            desc=f"{self.name}",
+            file=get_tqdm_stream(),
+        ):
             try:
                 paper = self.convert_to_paper(raw_paper)
             except Exception as exc:

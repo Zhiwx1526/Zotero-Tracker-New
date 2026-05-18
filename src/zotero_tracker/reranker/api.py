@@ -1,19 +1,31 @@
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from loguru import logger
 from openai import OpenAI
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from ..protocol import CorpusPaper, Paper
-from ..quality_metrics import (
-    load_scimago_map,
-    resolve_journal_quality,
-    source_authority_score,
-)
 from .base import BaseReranker, _text_for_embedding, register_reranker
 from .explain import attach_corpus_explanations
 from .cache_store import build_fingerprint, load_cache, save_cache
+
+
+def _authority_mapping_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def source_authority_score(source: str, mapping: dict[str, Any]) -> float | None:
+    if not source:
+        return None
+    raw = mapping.get(str(source).strip().lower())
+    return _authority_mapping_float(raw)
 
 
 @register_reranker("api")
@@ -28,19 +40,19 @@ class ApiReranker(BaseReranker):
         self._cache_enabled = bool(cache_cfg.get("enabled", True))
         self._cache_dir = Path(str(cache_cfg.get("dir", "cache")))
         self._text_format_version = str(cache_cfg.get("text_format_version", "title_abstract_v1"))
-        quality_cfg = config.executor.get("quality_ranking", {})
+        quality_cfg = OmegaConf.select(config, "executor.quality_ranking")
+        if quality_cfg is None:
+            quality_cfg = OmegaConf.create({})
         self._quality_enabled = bool(quality_cfg.get("enabled", False))
         self._quality_weights = {
-            "relevance": float(quality_cfg.get("weights", {}).get("relevance", 0.7)),
-            "citation": float(quality_cfg.get("weights", {}).get("citation", 0.15)),
-            "journal": float(quality_cfg.get("weights", {}).get("journal", 0.1)),
-            "authority": float(quality_cfg.get("weights", {}).get("authority", 0.05)),
+            "relevance": float(quality_cfg.get("weights", {}).get("relevance", 0.9)),
+            "authority": float(quality_cfg.get("weights", {}).get("authority", 0.1)),
         }
         self._fallback_policy = str(quality_cfg.get("fallback_policy", "redistribute")).strip().lower()
-        quality_data_cfg = config.get("quality_data", {})
-        self._sjr_cap = float(quality_data_cfg.get("sjr_log_cap", 10.0))
+        quality_data_cfg = OmegaConf.select(config, "quality_data")
+        if quality_data_cfg is None:
+            quality_data_cfg = OmegaConf.create({})
         self._source_authority_map = dict(quality_data_cfg.get("source_authority", {}))
-        self._scimago_map = load_scimago_map(quality_data_cfg.get("scimago_map_path"))
 
     def get_similarity_score(self, s1: list[str], s2: list[str]) -> np.ndarray:
         s1_embeddings = self._embed_texts(s1)
@@ -82,33 +94,9 @@ class ApiReranker(BaseReranker):
     def _apply_quality_ranking(self, candidates: list[Paper]) -> None:
         if not candidates:
             return
-        citation_values = [int(p.citation_count) for p in candidates if p.citation_count is not None]
-        citation_p95 = float(np.percentile(citation_values, 95)) if citation_values else None
-        if citation_p95 is not None and citation_p95 <= 0:
-            citation_p95 = None
-
         for p in candidates:
             rel_raw = float(p.score or 0.0)
             rel_norm = max(0.0, min(1.0, rel_raw / 10.0))
-            if p.journal_name:
-                sjr, quartile, journal_norm = resolve_journal_quality(
-                    p.journal_name,
-                    self._scimago_map,
-                    sjr_cap=self._sjr_cap,
-                )
-                if p.journal_sjr is None:
-                    p.journal_sjr = sjr
-                if p.journal_quartile is None:
-                    p.journal_quartile = quartile
-            else:
-                journal_norm = None
-
-            citation_norm = None
-            if p.citation_count is not None and citation_p95 is not None:
-                citation_norm = min(
-                    1.0,
-                    float(np.log1p(max(0, int(p.citation_count)))) / float(np.log1p(citation_p95)),
-                )
             authority_norm = source_authority_score(p.source, self._source_authority_map)
             if authority_norm is not None:
                 authority_norm = max(0.0, min(1.0, authority_norm))
@@ -116,8 +104,6 @@ class ApiReranker(BaseReranker):
 
             components: dict[str, float | None] = {
                 "relevance": rel_norm,
-                "citation": citation_norm,
-                "journal": journal_norm,
                 "authority": authority_norm,
             }
             fused_norm = self._fuse_components(components)
@@ -125,8 +111,6 @@ class ApiReranker(BaseReranker):
             p.score = fused_norm * 10.0
             p.score_breakdown = {
                 "relevance": rel_norm * 10.0,
-                "citation": (citation_norm or 0.0) * 10.0,
-                "journal": (journal_norm or 0.0) * 10.0,
                 "authority": (authority_norm or 0.0) * 10.0,
                 "quality_score": float(p.quality_score or 0.0),
                 "final_score": float(p.score or 0.0),
@@ -152,7 +136,7 @@ class ApiReranker(BaseReranker):
 
     def _quality_only_score(self, components: dict[str, float | None]) -> float | None:
         weights = self._quality_weights
-        quality_keys = ["citation", "journal", "authority"]
+        quality_keys = ["authority"]
         weighted: list[tuple[float, float]] = []
         for key in quality_keys:
             v = components.get(key)

@@ -61,7 +61,7 @@ llm:
     enabled: false
     # null 表示对邮件中的全部候选篇生成；设为正整数则仅前 N 篇
     max_papers: null
-  # 邮件开头「今日简报」（每封额外 1 次调用；默认关闭）
+  # 邮件开头「今日简报」（统计型导语，不调用 LLM；默认关闭）
   briefing:
     enabled: false
     # 写入简报 prompt 的最大篇数（标题+一句话摘要）
@@ -105,7 +105,6 @@ executor:
   reranker: api
   retriever_sleep_seconds: 1
   # 每篇论文邮件中的「为什么推荐」：书库分解条数与标题展示长度
-  explain_enabled: true     
   explain_top_k: 2     # 为什么推荐 条数
   explain_title_max_len: 80
   quality_ranking:
@@ -113,20 +112,32 @@ executor:
     # redistribute: 指标缺失时将权重按可用指标重分配；zero_fill: 缺失按 0 处理
     fallback_policy: redistribute
     weights:
-      relevance: 0.7
-      citation: 0.15
-      journal: 0.1
-      authority: 0.05
+      relevance: 0.9
+      authority: 0.1
+  rag:
+    enabled: false
+    use_zotero_corpus: true
+    zotero_pdf_extract: true
+    zotero_dedupe: true
+    top_k: 3
+    min_retrieval_score: 0.2
+    max_context_chars: 2200
 
 quality_data:
-  # Scimago 映射文件（CSV，示例列：journal_name,sjr,quartile）
-  scimago_map_path: null
-  sjr_log_cap: 10.0
   source_authority:
     openalex: 1.0
     arxiv: 0.75
     biorxiv: 0.65
     medrxiv: 0.65
+
+rag:
+  knowledge_base:
+    paths: ["data/rag_knowledge"]
+    index_path: cache/rag_index.json
+    chunk_size: 1200
+    chunk_overlap: 200
+    embedding_model: null
+    embedding_batch_size: 32
 
 feedback:
   enabled: false

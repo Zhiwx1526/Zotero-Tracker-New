@@ -109,7 +109,6 @@ def test_openalex_convert_to_paper_handles_missing_fields():
     assert paper.abstract == "Hello world"
     assert paper.url == "https://openalex.org/W123"
     assert paper.pdf_url == "https://example.org/paper.pdf"
-    assert paper.citation_count == 123
     assert paper.journal_name == "Nature"
 
     assert retriever.convert_to_paper({"title": "", "id": "x"}) is None

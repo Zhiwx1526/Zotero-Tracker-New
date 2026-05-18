@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
@@ -84,15 +85,20 @@ class Paper:
     natural_explain: Optional[str] = None
     doi: Optional[str] = None
     merged_sources: list[str] = field(default_factory=list)
-    citation_count: Optional[int] = None
     journal_name: Optional[str] = None
-    journal_sjr: Optional[float] = None
-    journal_quartile: Optional[str] = None
     source_authority_score: Optional[float] = None
     quality_score: Optional[float] = None
     score_breakdown: dict[str, float] = field(default_factory=dict)
+    rag_used: bool = False
+    rag_references: list[str] = field(default_factory=list)
 
-    def _generate_tldr_with_llm(self, openai_client: OpenAI, llm_params: Any) -> str:
+    def _generate_tldr_with_llm(
+        self,
+        openai_client: OpenAI,
+        llm_params: Any,
+        *,
+        rag_context_text: str | None = None,
+    ) -> str:
         # 配置里默认用 zh（避免 OmegaConf 在 ${oc.env:...,中文} 里解析失败）；环境变量可写 简体中文
         lang_raw = _llm_get(llm_params, "language", "zh")
         lang_display, is_zh = _llm_lang_display(lang_raw)
@@ -106,6 +112,11 @@ class Paper:
             if self.title:
                 prompt += f"标题：\n{self.title}\n\n"
             prompt += f"摘要：\n{self.abstract}\n\n"
+            if rag_context_text:
+                prompt += (
+                    "补充专业知识（来自检索知识库，仅可作为术语与背景参考；若与论文摘要冲突，以论文摘要为准）：\n"
+                    f"{rag_context_text}\n\n"
+                )
             system = (
                 "你是学术文献助手，擅长用一句话概括论文核心贡献与方法。"
                 f"请严格使用「{lang_display}」作答，不要输出英文（除非原文专有名词必要）。"
@@ -117,6 +128,12 @@ class Paper:
             if self.title:
                 prompt += f"Title:\n {self.title}\n\n"
             prompt += f"Abstract: {self.abstract}\n\n"
+            if rag_context_text:
+                prompt += (
+                    "Domain context from retrieval (use only as terminology/background hints; "
+                    "if it conflicts with paper abstract, trust the paper abstract):\n"
+                    f"{rag_context_text}\n\n"
+                )
             system = (
                 "You are an assistant who summarizes scientific papers in one sentence. "
                 f"Answer in {lang_display}."
@@ -124,16 +141,36 @@ class Paper:
 
         return _llm_chat_completion(openai_client, llm_params, system, prompt)
 
-    def generate_tldr(self, openai_client: OpenAI, llm_params: Any) -> str:
+    def generate_tldr(
+        self,
+        openai_client: OpenAI,
+        llm_params: Any,
+        *,
+        rag_context_text: str | None = None,
+        rag_references: list[str] | None = None,
+    ) -> str:
         try:
-            self.tldr = self._generate_tldr_with_llm(openai_client, llm_params)
+            self.rag_used = bool(rag_context_text)
+            self.rag_references = list(rag_references or [])
+            self.tldr = self._generate_tldr_with_llm(
+                openai_client,
+                llm_params,
+                rag_context_text=rag_context_text,
+            )
             return self.tldr
         except Exception as e:
             logger.warning(f"生成 TLDR 失败 {self.url}: {e}")
             self.tldr = self.abstract[:500] if self.abstract else ""
             return self.tldr
 
-    def _natural_explain_prompt(self, lang_display: str, is_zh: bool) -> tuple[str, str]:
+    def _natural_explain_prompt(
+        self,
+        lang_display: str,
+        is_zh: bool,
+        *,
+        rag_context_text: str | None = None,
+        corpus_evidence_text: str | None = None,
+    ) -> tuple[str, str]:
         title = (self.title or "").strip()
         abstract = (self.abstract or "").strip()
         kw = ", ".join(self.matched_keywords) if self.matched_keywords else ("（无）" if is_zh else "(none)")
@@ -173,43 +210,90 @@ class Paper:
 
         if is_zh:
             user = (
-                f"请用「{lang_display}」写 **2～4 句**（连续段落，不要分点列表），说明「为何会向用户推荐这篇候选论文」。\n"
-                "要求：紧扣书库证据与关键词；不要复述摘要全文；不要编造未出现在书库条目列表中的文献标题。\n\n"
+                f"请用「{lang_display}」按三段结构写推荐原因（每段 1-2 句）：\n"
+                "1) 为什么前沿（问题/方法/趋势）；\n"
+                "2) 与用户研究方向的关联；\n"
+                "3) 对课题组/后续研究的参考意义（可执行建议）。\n"
+                "要求：只能基于下方证据，不要编造未出现的书库文献或结论。\n\n"
                 f"候选论文标题：\n{title or '（无）'}\n\n"
                 f"候选论文摘要：\n{abstract or '（无）'}\n\n"
                 f"命中展示关键词：{kw}\n\n"
                 f"{corpus_block}\n"
             )
+            if corpus_evidence_text:
+                user += f"\n书库前序证据（Top 2-3）：\n{corpus_evidence_text}\n"
+            if rag_context_text:
+                user += (
+                    "\n可用领域知识（检索得到，仅作为术语与背景参考；若与当前论文摘要冲突，以当前论文摘要为准）：\n"
+                    f"{rag_context_text}\n"
+                )
             system = (
                 "你是学术文献推荐助手，擅长用简短自然语言解释个性化推荐依据。"
                 f"请严格使用「{lang_display}」作答。"
             )
         else:
             user = (
-                f"In {lang_display}, write **2–4 sentences** (one short paragraph, no bullet lists) explaining "
-                "why this candidate paper was recommended to the user.\n"
-                "Ground the answer in the evidence below; do not paraphrase the entire abstract; "
-                "do not invent library paper titles not listed.\n\n"
+                f"In {lang_display}, write recommendation reasons in exactly 3 short sections: "
+                "(1) why this paper is frontier, (2) relation to user direction, "
+                "(3) practical value for the lab/future work.\n"
+                "Use only evidence below; do not invent missing library papers.\n\n"
                 f"Candidate title:\n{title or '(none)'}\n\n"
                 f"Candidate abstract:\n{abstract or '(none)'}\n\n"
                 f"Matched keywords: {kw}\n\n"
                 f"{corpus_block}\n"
             )
+            if corpus_evidence_text:
+                user += f"\nTop prior library evidence (2-3):\n{corpus_evidence_text}\n"
+            if rag_context_text:
+                user += (
+                    "\nDomain context from retrieval (terminology/background hints only; "
+                    "if conflicts with candidate abstract, trust the candidate abstract):\n"
+                    f"{rag_context_text}\n"
+                )
             system = (
                 "You explain personalized academic paper recommendations in clear, concise language. "
                 f"Answer in {lang_display}."
             )
         return system, user
 
-    def generate_natural_explain(self, openai_client: OpenAI, llm_params: Any) -> str:
+    def generate_natural_explain(
+        self,
+        openai_client: OpenAI,
+        llm_params: Any,
+        *,
+        rag_context_text: str | None = None,
+        rag_references: list[str] | None = None,
+        corpus_evidence_text: str | None = None,
+    ) -> str:
         lang_raw = _llm_get(llm_params, "language", "zh")
         lang_display, is_zh = _llm_lang_display(lang_raw)
-        system, user = self._natural_explain_prompt(lang_display, is_zh)
+        self.rag_used = bool(rag_context_text)
+        self.rag_references = list(rag_references or [])
+        system, user = self._natural_explain_prompt(
+            lang_display,
+            is_zh,
+            rag_context_text=rag_context_text,
+            corpus_evidence_text=corpus_evidence_text,
+        )
         return _llm_chat_completion(openai_client, llm_params, system, user, max_prompt_tokens=6000)
 
-    def fill_natural_explain(self, openai_client: OpenAI, llm_params: Any) -> str:
+    def fill_natural_explain(
+        self,
+        openai_client: OpenAI,
+        llm_params: Any,
+        *,
+        rag_context_text: str | None = None,
+        rag_references: list[str] | None = None,
+        corpus_evidence_text: str | None = None,
+    ) -> str:
         try:
-            self.natural_explain = self.generate_natural_explain(openai_client, llm_params)
+            self.natural_explain = self.generate_natural_explain(
+                openai_client,
+                llm_params,
+                rag_context_text=rag_context_text,
+                rag_references=rag_references,
+                corpus_evidence_text=corpus_evidence_text,
+            )
             return self.natural_explain or ""
         except Exception as e:
             logger.warning(f"生成推荐解读失败 {self.url}: {e}")
@@ -217,69 +301,43 @@ class Paper:
             return ""
 
 
-def generate_briefing_intro(
-    openai_client: OpenAI,
-    llm_params: Any,
+def _briefing_venue_label(paper: Paper) -> str:
+    """有期刊名用期刊名；否则用数据来源作为「来源」统计桶。"""
+    j = (paper.journal_name or "").strip()
+    if j:
+        return j
+    src = (paper.source or "").strip() or "unknown"
+    return f"来源（{src}）"
+
+
+def build_briefing_intro_from_papers(
     papers: list[Paper],
-    keyword_terms: list[str],
-    date_label: str,
     *,
-    max_papers: int,
+    date_label: str,
+    lang_raw: Any,
 ) -> str:
+    """邮件「今日简报」导语：本次推荐篇数 + 期刊/会议或来源分布（确定性，不调用 LLM）。"""
     if not papers:
         return ""
-    lang_raw = _llm_get(llm_params, "language", "zh")
-    lang_display, is_zh = _llm_lang_display(lang_raw)
-    n = max(1, min(max_papers, len(papers)))
-    slice_p = papers[:n]
+    _, is_zh = _llm_lang_display(lang_raw)
+    counts = Counter(_briefing_venue_label(p) for p in papers)
+    total = len(papers)
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
     if is_zh:
-        lines = [
-            f"推送日期：{date_label}",
-            f"用户书库兴趣关键词（展示用）：{', '.join(keyword_terms) if keyword_terms else '（无）'}",
-            "",
-            f"以下共 {len(slice_p)} 篇（邮件内顺序，最多列出 {n} 篇供你归纳）：",
-            "",
-        ]
-        for i, p in enumerate(slice_p, start=1):
-            tldr = (p.tldr or "").strip().replace("\n", " ")
-            lines.append(f"{i}. 【{p.source}】{p.title}")
-            lines.append(f"   一句话摘要：{tldr or '（无）'}")
-            lines.append("")
-        user = (
-            "\n".join(lines)
-            + f"\n请用「{lang_display}」写 **3～5 句** 简报导语（一段连续文字，不要分点）："
-            "概括今日推送的主题倾向、与用户兴趣的关系，并可略微提示阅读顺序。"
-            "不必逐篇点名；不要编造列表中未出现的论文内容。"
+        parts = [f"{name} {cnt} 篇" for name, cnt in ordered]
+        detail = "；".join(parts)
+        return (
+            f"推送日期：{date_label}。\n\n"
+            f"本次推荐文献共 {total} 篇。按期刊、会议或来源统计：{detail}。"
         )
-        system = (
-            "你是学术简报编辑，擅长为研究者写当日文献推送的开头导语。"
-            f"请严格使用「{lang_display}」作答。"
-        )
-    else:
-        lines = [
-            f"Digest date: {date_label}",
-            f"Corpus keyword hints: {', '.join(keyword_terms) if keyword_terms else '(none)'}",
-            "",
-            f"Up to {n} papers (email order):",
-            "",
-        ]
-        for i, p in enumerate(slice_p, start=1):
-            tldr = (p.tldr or "").strip().replace("\n", " ")
-            lines.append(f"{i}. [{p.source}] {p.title}")
-            lines.append(f"   TLDR: {tldr or '(none)'}")
-            lines.append("")
-        user = (
-            "\n".join(lines)
-            + f"\nIn {lang_display}, write **3–5 sentences** as an email opening briefing (one paragraph, "
-            "no bullets): summarize themes, relation to the user's interests, optional light reading guidance. "
-            "You need not mention every paper; do not invent content not implied by the list."
-        )
-        system = (
-            "You write concise opening briefings for daily academic paper digests. "
-            f"Answer in {lang_display}."
-        )
-    return _llm_chat_completion(openai_client, llm_params, system, user, max_prompt_tokens=6000)
+
+    parts_en = [f"{name}: {cnt}" for name, cnt in ordered]
+    detail_en = "; ".join(parts_en)
+    return (
+        f"Digest date: {date_label}.\n\n"
+        f"This digest lists {total} recommended papers. By venue or source: {detail_en}."
+    )
 
 
 def fill_briefing_intro(
@@ -290,17 +348,10 @@ def fill_briefing_intro(
     date_label: str,
 ) -> str | None:
     try:
-        b_cfg = _llm_get(llm_params, "briefing", {}) or {}
-        mp = b_cfg.get("max_papers", 15) if hasattr(b_cfg, "get") else 15
-        max_papers = int(mp) if mp is not None else 15
-        return generate_briefing_intro(
-            openai_client,
-            llm_params,
-            papers,
-            keyword_terms,
-            date_label,
-            max_papers=max_papers,
-        )
+        if not papers:
+            return None
+        lang_raw = _llm_get(llm_params, "language", "zh")
+        return build_briefing_intro_from_papers(papers, date_label=date_label, lang_raw=lang_raw)
     except Exception as e:
         logger.warning(f"生成简报导语失败: {e}")
         return None
